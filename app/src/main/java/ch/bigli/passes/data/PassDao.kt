@@ -19,4 +19,7 @@ interface PassDao {
 
     @Query("DELETE FROM passes WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("UPDATE passes SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String)
 }

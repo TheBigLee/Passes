@@ -5,6 +5,9 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.SourceFormat
+import ch.bigli.passes.importing.PassImporter
+import ch.bigli.passes.importing.PdfImporter
 import ch.bigli.passes.importing.PkPassImporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +21,8 @@ import java.util.UUID
 class PassRepository(
     private val context: Context,
     private val dao: PassDao,
-    private val pkPassImporter: PkPassImporter,
+    private val pkPassImporter: PkPassImporter = PkPassImporter(),
+    private val pdfImporter: PdfImporter = PdfImporter(),
 ) {
     fun observeAll(): Flow<List<Pass>> = dao.observeAll().map { list -> list.map { it.toDomain() } }
 
@@ -29,16 +33,24 @@ class PassRepository(
         dao.deleteById(id)
     }
 
-    /** @param displayName the original file name, used only for format sniffing. */
+    /** Renames a pass. A blank/whitespace-only title is ignored so a pass can't be left untitled. */
+    suspend fun updateTitle(id: String, title: String) = withContext(Dispatchers.IO) {
+        val trimmed = title.trim()
+        if (trimmed.isNotEmpty()) dao.updateTitle(id, trimmed)
+    }
+
+    /** Detects the format from [bytes], persists the raw file, imports, and stores the pass. */
     suspend fun import(bytes: ByteArray, displayName: String): Pass = withContext(Dispatchers.IO) {
-        if (!isPkPass(bytes, displayName)) {
-            throw ImportError.UnsupportedFormat(displayName)
+        val (importer, ext) = when (detectPassFormat(bytes)) {
+            SourceFormat.PKPASS -> pkPassImporter as PassImporter to "pkpass"
+            SourceFormat.PDF -> pdfImporter as PassImporter to "pdf"
+            else -> throw ImportError.UnsupportedFormat(displayName)
         }
         val dir = File(context.filesDir, "passes").apply { mkdirs() }
-        val target = File(dir, "${UUID.randomUUID()}.pkpass")
+        val target = File(dir, "${UUID.randomUUID()}.$ext")
         target.writeBytes(bytes)
         val pass = try {
-            pkPassImporter.import(bytes, target.absolutePath)
+            importer.import(bytes, target.absolutePath, displayName)
         } catch (e: Throwable) {
             target.delete()
             throw e
@@ -88,10 +100,5 @@ class PassRepository(
                 ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         }.getOrNull()
         return fromProvider ?: uri.lastPathSegment ?: "pass.pkpass"
-    }
-
-    private fun isPkPass(bytes: ByteArray, name: String): Boolean {
-        val zipMagic = bytes.size >= 2 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()
-        return zipMagic && (name.endsWith(".pkpass", true) || name.endsWith(".zip", true) || true)
     }
 }

@@ -23,6 +23,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
+import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.images.PassImageLoader
 import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.PassDetailScreen
@@ -60,7 +62,7 @@ class MainActivity : ComponentActivity() {
             }
             lifecycleScope.launch {
                 try {
-                    app.pendingPassId.value = app.repository.importFromUrl(target).id
+                    app.pendingPass.value = app.repository.importFromUrl(target).toPending()
                 } catch (e: Exception) {
                     Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
                 }
@@ -76,13 +78,16 @@ class MainActivity : ComponentActivity() {
         if (uri == null) return
         lifecycleScope.launch {
             try {
-                app.pendingPassId.value = app.repository.importFromUri(uri).id
+                app.pendingPass.value = app.repository.importFromUri(uri).toPending()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
             }
         }
     }
 }
+
+/** PDF-sourced passes open the title editor on arrival; others don't. */
+private fun Pass.toPending() = PendingPass(id, editTitle = sourceFormat == SourceFormat.PDF)
 
 private class VmFactory(private val create: () -> ViewModel) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -95,11 +100,11 @@ private fun AppNav(app: PassApp) {
     val imageLoader = app.imageLoader
     val nav = rememberNavController()
 
-    val pending by app.pendingPassId.collectAsState()
+    val pending by app.pendingPass.collectAsState()
     LaunchedEffect(pending) {
-        pending?.let { id ->
-            nav.navigate("detail/$id")
-            app.pendingPassId.value = null
+        pending?.let { p ->
+            nav.navigate("detail/${p.id}?editTitle=${p.editTitle}")
+            app.pendingPass.value = null
         }
     }
 
@@ -113,8 +118,7 @@ private fun AppNav(app: PassApp) {
                 if (uri != null) {
                     scope.launch {
                         try {
-                            val pass = repo.importFromUri(uri)
-                            app.pendingPassId.value = pass.id
+                            app.pendingPass.value = repo.importFromUri(uri).toPending()
                         } catch (e: Exception) {
                             vm.reportError(e.message ?: "Import failed")
                         }
@@ -129,12 +133,21 @@ private fun AppNav(app: PassApp) {
             )
         }
         composable(
-            "detail/{id}",
-            arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            "detail/{id}?editTitle={editTitle}",
+            arguments = listOf(
+                navArgument("id") { type = NavType.StringType },
+                navArgument("editTitle") { type = NavType.BoolType; defaultValue = false },
+            ),
         ) { entry ->
             val id = entry.arguments!!.getString("id")!!
+            val editTitle = entry.arguments!!.getBoolean("editTitle")
             val vm: PassDetailViewModel = viewModel(factory = VmFactory { PassDetailViewModel(repo, id) })
-            PassDetailScreen(viewModel = vm, imageLoader = imageLoader, onBack = { nav.popBackStack() })
+            PassDetailScreen(
+                viewModel = vm,
+                imageLoader = imageLoader,
+                onBack = { nav.popBackStack() },
+                openTitleEditor = editTitle,
+            )
         }
     }
 }
