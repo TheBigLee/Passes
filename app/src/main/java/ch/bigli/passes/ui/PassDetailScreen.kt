@@ -1,6 +1,7 @@
 package ch.bigli.passes.ui
 
 import android.app.Activity
+import android.graphics.Bitmap
 import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,12 +28,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,12 +44,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
 import ch.bigli.passes.domain.BarcodeFormat
 import ch.bigli.passes.domain.FieldPosition
-import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.images.PassImage
+import ch.bigli.passes.images.PassImageLoader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PassDetailScreen(
     viewModel: PassDetailViewModel,
+    imageLoader: PassImageLoader,
     onBack: () -> Unit,
 ) {
     val pass by viewModel.pass.collectAsStateWithLifecycle()
@@ -70,11 +76,31 @@ fun PassDetailScreen(
     val bg = bgColor?.let { Color(it) } ?: Color(0xFF1A73E8)
     val fg = if (bgColor != null) Color(legibleTextColor(bgColor, p?.fgColor)) else Color.White
 
+    val rawPath = p?.rawFilePath
+    val logo by produceState<Bitmap?>(initialValue = null, rawPath) {
+        value = rawPath?.let { imageLoader.load(it, PassImage.LOGO) }
+    }
+    val strip by produceState<Bitmap?>(initialValue = null, rawPath) {
+        value = rawPath?.let { imageLoader.load(it, PassImage.STRIP) }
+    }
+
     Scaffold(
         containerColor = bg,
         topBar = {
             TopAppBar(
-                title = { Text(p?.organization ?: "") },
+                title = {
+                    val currentLogo = logo
+                    if (currentLogo != null) {
+                        Image(
+                            currentLogo.asImageBitmap(),
+                            contentDescription = p?.organization,
+                            modifier = Modifier.height(28.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Text(p?.organization ?: "")
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = fg)
@@ -90,40 +116,54 @@ fun PassDetailScreen(
         },
     ) { padding ->
         if (p == null) return@Scaffold
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(p.title, color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.size(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                p.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
-                        Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            strip?.let {
+                Image(
+                    it.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth,
+                )
             }
-            Spacer(Modifier.weight(1f))
-            p.barcode?.let { bc ->
-                val renderer = remember { BarcodeRenderer() }
-                val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
-                val bmp = remember(bc) {
-                    if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
-                }
-                Column(
-                    Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
-                    bc.altText?.let {
-                        Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            Column(
+                Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(p.title, color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.size(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    p.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
+                            Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
-                Text("☀ Screen brightened for scanning", color = fg.copy(alpha = 0.8f),
-                    fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
-            } ?: Text("No barcode on this pass", color = fg)
-            Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(1f))
+                p.barcode?.let { bc ->
+                    val renderer = remember { BarcodeRenderer() }
+                    val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
+                    val bmp = remember(bc) {
+                        if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
+                    }
+                    Column(
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
+                        bc.altText?.let {
+                            Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                    Text(
+                        "☀ Screen brightened for scanning",
+                        color = fg.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                } ?: Text("No barcode on this pass", color = fg)
+                Spacer(Modifier.weight(1f))
+            }
         }
     }
 }
