@@ -38,7 +38,7 @@ class PassRepository(
         val target = File(dir, "${UUID.randomUUID()}.pkpass")
         target.writeBytes(bytes)
         val pass = try {
-            pkPassImporter.import(bytes, target.absolutePath)
+            pkPassImporter.import(bytes, target.absolutePath, displayName)
         } catch (e: Throwable) {
             target.delete()
             throw e

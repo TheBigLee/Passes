@@ -17,7 +17,7 @@ import java.util.zip.ZipInputStream
 class PkPassImporter : PassImporter {
     private val json = Json { ignoreUnknownKeys = true }
 
-    override fun import(bytes: ByteArray, rawFilePath: String): Pass {
+    override fun import(bytes: ByteArray, rawFilePath: String, @Suppress("UNUSED_PARAMETER") displayName: String): Pass {
         val passJsonBytes = extractPassJson(bytes)
         val pj = try {
             json.decodeFromString(PkPassJson.serializer(), passJsonBytes.decodeToString())

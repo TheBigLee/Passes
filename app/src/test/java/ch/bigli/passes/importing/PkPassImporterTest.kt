@@ -15,7 +15,7 @@ class PkPassImporterTest {
     private val importer = PkPassImporter()
 
     @Test fun `parses boarding pass core fields`() {
-        val pass = importer.import(fixture("sample.pkpass").readBytes(), "/data/sample.pkpass")
+        val pass = importer.import(fixture("sample.pkpass").readBytes(), "/data/sample.pkpass", "sample.pkpass")
         assertEquals(PassType.BOARDING, pass.type)
         assertEquals("SWISS", pass.organization)
         assertEquals(0xFF1A73E8, pass.bgColor)
@@ -27,13 +27,13 @@ class PkPassImporterTest {
 
     @Test fun `rejects non-zip file`() {
         assertThrows(ImportError.CorruptFile::class.java) {
-            importer.import(fixture("notazip.pkpass").readBytes(), "/data/x.pkpass")
+            importer.import(fixture("notazip.pkpass").readBytes(), "/data/x.pkpass", "x.pkpass")
         }
     }
 
     @Test fun `rejects zip without pass json`() {
         assertThrows(ImportError.CorruptFile::class.java) {
-            importer.import(fixture("nopassjson.pkpass").readBytes(), "/data/x.pkpass")
+            importer.import(fixture("nopassjson.pkpass").readBytes(), "/data/x.pkpass", "x.pkpass")
         }
     }
 }
