@@ -23,6 +23,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
+import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.PassDetailScreen
 import ch.bigli.passes.ui.PassDetailViewModel
 import ch.bigli.passes.ui.PassListScreen
@@ -44,19 +45,37 @@ class MainActivity : ComponentActivity() {
         handleIncomingPass(intent)
     }
 
-    /** Extracts a .pkpass Uri from a VIEW or SEND intent and imports it, signalling navigation on success. */
+    /** Extracts a pass from a VIEW (file/content or walletpasses://) or SEND intent and imports it. */
     private fun handleIncomingPass(intent: Intent?) {
-        val uri: Uri? = when (intent?.action) {
-            Intent.ACTION_VIEW -> intent.data
+        val app = application as PassApp
+        val action = intent?.action
+        val viewUri: Uri? = if (action == Intent.ACTION_VIEW) intent.data else null
+
+        if (viewUri?.scheme == "walletpasses") {
+            val target = walletPassesTargetUrl(viewUri)
+            if (target == null) {
+                Toast.makeText(this, "Invalid pass link", Toast.LENGTH_LONG).show()
+                return
+            }
+            lifecycleScope.launch {
+                try {
+                    app.pendingPassId.value = app.repository.importFromUrl(target).id
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+
+        val uri: Uri? = when (action) {
+            Intent.ACTION_VIEW -> viewUri
             Intent.ACTION_SEND -> @Suppress("DEPRECATION") (intent.getParcelableExtra(Intent.EXTRA_STREAM))
             else -> null
         }
         if (uri == null) return
-        val app = application as PassApp
         lifecycleScope.launch {
             try {
-                val pass = app.repository.importFromUri(uri)
-                app.pendingPassId.value = pass.id
+                app.pendingPassId.value = app.repository.importFromUri(uri).id
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
             }

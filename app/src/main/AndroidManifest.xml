@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:name=".PassApp"
         android:allowBackup="true"
@@ -32,6 +33,14 @@
                 <data android:host="*" />
                 <data android:mimeType="application/octet-stream" />
                 <data android:pathPattern=".*\\.pkpass" />
+            </intent-filter>
+
+            <!-- Web "Add to Wallet": walletpasses://import/<url-encoded https url> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="walletpasses" />
             </intent-filter>
 
             <!-- Share sheet -->
