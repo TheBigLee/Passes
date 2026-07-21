@@ -415,9 +415,276 @@ Expected: app opens directly on the SWISS "ZRH → JFK" detail screen with the Q
 
 ---
 
+## Task 5: Download-and-import (`importFromUrl` + walletpasses:// link parsing)
+
+Support the web "Add to Wallet" flow: a `walletpasses://import/<url-encoded https url>` link is caught by the app, the real `.pkpass` URL is decoded, downloaded over HTTP(S), and fed into the existing import pipeline.
+
+**Files:**
+- Modify: `app/src/main/java/ch/bigli/passes/data/PassRepository.kt` (+ `importFromUrl`)
+- Create: `app/src/main/java/ch/bigli/passes/importing/WalletPassesLink.kt` (pure Uri → https URL parser)
+- Test: `app/src/test/java/ch/bigli/passes/importing/WalletPassesLinkTest.kt`
+- Test: `app/src/test/java/ch/bigli/passes/data/PassRepositoryUrlTest.kt`
+
+- [ ] **Step 1: Write the failing parser test** — `app/src/test/java/ch/bigli/passes/importing/WalletPassesLinkTest.kt`
+```kotlin
+package ch.bigli.passes.importing
+
+import android.net.Uri
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class WalletPassesLinkTest {
+    @Test fun `decodes the encoded https target after import host`() {
+        val uri = Uri.parse("walletpasses://import/https%3A%2F%2Fwalletpasses.io%2Fsample.pkpass")
+        assertEquals("https://walletpasses.io/sample.pkpass", walletPassesTargetUrl(uri))
+    }
+
+    @Test fun `accepts http as well as https`() {
+        val uri = Uri.parse("walletpasses://import/http%3A%2F%2Fexample.com%2Fp.pkpass")
+        assertEquals("http://example.com/p.pkpass", walletPassesTargetUrl(uri))
+    }
+
+    @Test fun `rejects a non-http decoded target`() {
+        val uri = Uri.parse("walletpasses://import/file%3A%2F%2F%2Fetc%2Fpasswd")
+        assertNull(walletPassesTargetUrl(uri))
+    }
+
+    @Test fun `returns null when there is no path`() {
+        assertNull(walletPassesTargetUrl(Uri.parse("walletpasses://import")))
+    }
+}
+```
+
+- [ ] **Step 2: Run → verify FAIL** (`walletPassesTargetUrl` unresolved).
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest --tests "*WalletPassesLinkTest*"`
+
+- [ ] **Step 3: Implement the parser** — `app/src/main/java/ch/bigli/passes/importing/WalletPassesLink.kt`
+```kotlin
+package ch.bigli.passes.importing
+
+import android.net.Uri
+import java.net.URLDecoder
+
+/**
+ * Extracts the real pkpass download URL from a `walletpasses://import/<url-encoded https url>` link.
+ * Returns null if the link has no encoded target or the decoded target is not an http(s) URL.
+ */
+fun walletPassesTargetUrl(uri: Uri): String? {
+    val encoded = uri.encodedPath?.trimStart('/')?.takeIf { it.isNotBlank() } ?: return null
+    val decoded = runCatching { URLDecoder.decode(encoded, "UTF-8") }.getOrNull() ?: return null
+    return decoded.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+}
+```
+
+- [ ] **Step 4: Run → verify PASS** (4 parser tests).
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest --tests "*WalletPassesLinkTest*"`
+
+- [ ] **Step 5: Write the failing download test** — `app/src/test/java/ch/bigli/passes/data/PassRepositoryUrlTest.kt`. Serves the fixture from an in-JVM HTTP server (no external network).
+```kotlin
+package ch.bigli.passes.data
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import ch.bigli.passes.domain.ImportError
+import ch.bigli.passes.importing.PkPassImporter
+import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.net.InetSocketAddress
+
+@RunWith(RobolectricTestRunner::class)
+class PassRepositoryUrlTest {
+    private lateinit var db: PassDatabase
+    private lateinit var repo: PassRepository
+    private lateinit var server: HttpServer
+    private lateinit var base: String
+
+    private fun fixture(name: String) =
+        checkNotNull(javaClass.classLoader!!.getResourceAsStream("fixtures/$name")).readBytes()
+
+    @Before fun setup() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        db = Room.inMemoryDatabaseBuilder(ctx, PassDatabase::class.java).allowMainThreadQueries().build()
+        repo = PassRepository(ctx, db.passDao(), PkPassImporter())
+        val bytes = fixture("sample.pkpass")
+        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/sample.pkpass") { ex ->
+            ex.sendResponseHeaders(200, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        server.createContext("/missing.pkpass") { ex ->
+            ex.sendResponseHeaders(404, -1)
+            ex.close()
+        }
+        server.start()
+        base = "http://127.0.0.1:${server.address.port}"
+    }
+
+    @After fun tearDown() { server.stop(0); db.close() }
+
+    @Test fun `importFromUrl downloads and persists a pass`() = runTest {
+        val pass = repo.importFromUrl("$base/sample.pkpass")
+        assertEquals("SWISS", pass.organization)
+        assertEquals(1, repo.observeAll().first().size)
+    }
+
+    @Test fun `importFromUrl throws on http error`() = runTest {
+        try {
+            repo.importFromUrl("$base/missing.pkpass")
+            error("expected ImportError")
+        } catch (e: Exception) {
+            assertTrue(e is ImportError)
+        }
+    }
+}
+```
+
+- [ ] **Step 6: Run → verify FAIL** (`importFromUrl` unresolved).
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest --tests "*PassRepositoryUrlTest*"`
+
+- [ ] **Step 7: Implement `importFromUrl`** — add to `PassRepository.kt`. Add imports:
+```kotlin
+import java.net.HttpURLConnection
+import java.net.URL
+```
+Add this method inside the class (after `importFromUri`):
+```kotlin
+    /**
+     * Downloads a .pkpass from [url] (http/https) off the main thread and imports it. Used by the
+     * walletpasses:// "Add to Wallet" web flow. Throws [ImportError.CorruptFile] on a network/HTTP failure.
+     */
+    suspend fun importFromUrl(url: String): Pass = withContext(Dispatchers.IO) {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 15000
+            instanceFollowRedirects = true
+        }
+        val bytes = try {
+            val code = conn.responseCode
+            if (code !in 200..299) throw ImportError.CorruptFile("download failed: HTTP $code")
+            conn.inputStream.use { it.readBytes() }
+        } catch (e: ImportError) {
+            throw e
+        } catch (e: Exception) {
+            throw ImportError.CorruptFile("download failed: ${e.message}")
+        } finally {
+            conn.disconnect()
+        }
+        val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "pass.pkpass" }
+        import(bytes, name)
+    }
+```
+
+- [ ] **Step 8: Run → verify PASS** (both URL tests + existing repository tests unaffected).
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest --tests "*PassRepository*"`
+
+- [ ] **Step 9: Commit**
+```bash
+git add app/src/main/java/ch/bigli/passes/data/PassRepository.kt app/src/main/java/ch/bigli/passes/importing/WalletPassesLink.kt app/src/test/java/ch/bigli/passes/importing/WalletPassesLinkTest.kt app/src/test/java/ch/bigli/passes/data/PassRepositoryUrlTest.kt
+git commit -m "feat: add importFromUrl and walletpasses:// link parsing"
+```
+Append the Co-Authored-By trailer.
+
+---
+
+## Task 6: Register walletpasses:// scheme + wire it up
+
+**Files:**
+- Modify: `app/src/main/AndroidManifest.xml` (INTERNET permission + scheme intent-filter)
+- Modify: `app/src/main/java/ch/bigli/passes/MainActivity.kt` (route the scheme through `importFromUrl`)
+
+- [ ] **Step 1: Manifest.** Add the INTERNET permission as a child of `<manifest>` (before `<application>`):
+```xml
+    <uses-permission android:name="android.permission.INTERNET" />
+```
+Add this intent-filter inside the `<activity android:name=".MainActivity">` element (alongside the existing filters):
+```xml
+            <!-- Web "Add to Wallet": walletpasses://import/<url-encoded https url> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="walletpasses" />
+            </intent-filter>
+```
+
+- [ ] **Step 2: Route the scheme in `MainActivity.handleIncomingPass`.** Replace the existing `handleIncomingPass` method with a version that branches on the `walletpasses` scheme before the content/file path. Add imports `import ch.bigli.passes.importing.walletPassesTargetUrl`. New method:
+```kotlin
+    /** Extracts a pass from a VIEW (file/content or walletpasses://) or SEND intent and imports it. */
+    private fun handleIncomingPass(intent: Intent?) {
+        val app = application as PassApp
+        val action = intent?.action
+        val viewUri: Uri? = if (action == Intent.ACTION_VIEW) intent.data else null
+
+        if (viewUri?.scheme == "walletpasses") {
+            val target = walletPassesTargetUrl(viewUri)
+            if (target == null) {
+                Toast.makeText(this, "Invalid pass link", Toast.LENGTH_LONG).show()
+                return
+            }
+            lifecycleScope.launch {
+                try {
+                    app.pendingPassId.value = app.repository.importFromUrl(target).id
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+
+        val uri: Uri? = when (action) {
+            Intent.ACTION_VIEW -> viewUri
+            Intent.ACTION_SEND -> @Suppress("DEPRECATION") (intent.getParcelableExtra(Intent.EXTRA_STREAM))
+            else -> null
+        }
+        if (uri == null) return
+        lifecycleScope.launch {
+            try {
+                app.pendingPassId.value = app.repository.importFromUri(uri).id
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+```
+
+- [ ] **Step 3: Build + full test suite.**
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:assembleDebug` → BUILD SUCCESSFUL
+`JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest` → all pass.
+
+- [ ] **Step 4: Commit**
+```bash
+git add app/src/main/AndroidManifest.xml app/src/main/java/ch/bigli/passes/MainActivity.kt
+git commit -m "feat: register walletpasses:// scheme and download passes from web links"
+```
+Append the Co-Authored-By trailer.
+
+- [ ] **Step 5: On-device verification** (controller-driven). With a locally reachable pkpass, fire:
+```bash
+ADB=/home/bigli/Android/Sdk/platform-tools/adb
+# encoded target points at a reachable https .pkpass; verify the app opens on the imported pass detail
+$ADB shell am start -a android.intent.action.VIEW -d "walletpasses://import/<url-encoded-https-pkpass>" ch.bigli.passes/.MainActivity
+```
+Expected: app downloads the pass and lands on its detail screen. (If no public pkpass URL is handy, this step can be verified against a host-run HTTP server reachable from the device, or deferred to the user.)
+
+---
+
 ## Self-Review notes
 
 - **Spec coverage:** "Open with" VIEW intent (Task 3 filters + Task 2 handler), Share SEND intent (Task 3 + handler), reuse of existing import pipeline via `importFromUri` (Task 1), auto-navigate to imported pass (Task 2 `pendingPassId`), single-instance behaviour (Task 3 `singleTask` + `onNewIntent`).
 - **DRY:** the picker and both intent actions share one code path (`PassRepository.importFromUri`); the inline byte-reading from Phase 1's picker is removed.
+- **walletpasses:// (Tasks 5–6):** web "Add to Wallet" links (`walletpasses://import/<url-encoded https url>`) are parsed (`walletPassesTargetUrl`), the `.pkpass` is downloaded (`importFromUrl`, needs INTERNET permission), and funnelled through the same `import(bytes, name)` pipeline. Still `.pkpass` only.
 - **Deferred (unchanged):** PDF/QR/Google importers (Phase 3), signature verification + auto-update (Phase 4). No new formats added here.
 - **Type consistency:** `importFromUri(uri: Uri): Pass` returns the same `Pass` used everywhere; `pendingPassId: MutableStateFlow<String?>` holds a pass `id` matching the `detail/{id}` nav route.
