@@ -21,6 +21,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
+sealed interface RefreshResult {
+    data class Updated(val pass: Pass) : RefreshResult
+    data object Unchanged : RefreshResult
+    data object Voided : RefreshResult
+    data object NotUpdatable : RefreshResult
+    data class Error(val message: String) : RefreshResult
+}
+
 class PassRepository(
     private val context: Context,
     private val dao: PassDao,
@@ -117,6 +125,61 @@ class PassRepository(
         }
         val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "pass.pkpass" }
         import(bytes, name)
+    }
+
+    /**
+     * Polls the pass's `webServiceURL` (Apple PassKit web service protocol) for a fresher pkpass.
+     * No-ops (returns [RefreshResult.NotUpdatable]) for passes without update info, non-pkpass
+     * passes, and already-voided passes — none of these make a network request.
+     */
+    suspend fun refreshPass(id: String): RefreshResult = withContext(Dispatchers.IO) {
+        val pass = dao.getById(id)?.toDomain() ?: return@withContext RefreshResult.NotUpdatable
+        val update = pass.updateInfo
+        if (pass.sourceFormat != SourceFormat.PKPASS || update == null || pass.voided) {
+            return@withContext RefreshResult.NotUpdatable
+        }
+        val url = "${update.webServiceUrl.trimEnd('/')}/v1/passes/${update.passTypeId}/${update.serialNumber}"
+        val conn = try {
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 15000
+                setRequestProperty("Authorization", "ApplePass ${update.authToken}")
+                pass.lastModified?.let { setRequestProperty("If-Modified-Since", it) }
+            }
+        } catch (e: Exception) {
+            return@withContext RefreshResult.Error("connection failed: ${e.message}")
+        }
+        try {
+            when (val code = conn.responseCode) {
+                200 -> {
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    val fresh = try {
+                        pkPassImporter.import(bytes, pass.rawFilePath, pass.title)
+                    } catch (e: Exception) {
+                        return@withContext RefreshResult.Error("malformed update: ${e.message}")
+                    }
+                    File(pass.rawFilePath).writeBytes(bytes)
+                    val merged = fresh.copy(
+                        id = pass.id,
+                        title = pass.title,
+                        voided = false,
+                        lastModified = conn.getHeaderField("Last-Modified") ?: pass.lastModified,
+                    )
+                    dao.insert(merged.toEntity())
+                    RefreshResult.Updated(merged)
+                }
+                304 -> RefreshResult.Unchanged
+                410 -> {
+                    dao.markVoided(pass.id)
+                    RefreshResult.Voided
+                }
+                else -> RefreshResult.Error("unexpected status $code")
+            }
+        } catch (e: Exception) {
+            RefreshResult.Error("refresh failed: ${e.message}")
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun displayName(uri: Uri): String {
