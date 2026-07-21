@@ -123,6 +123,7 @@ private fun AppNav(app: PassApp) {
             }
             PassListScreen(
                 viewModel = vm,
+                imageLoader = imageLoader,
                 onImportClick = { picker.launch(arrayOf("*/*")) },
                 onPassClick = { id -> nav.navigate("detail/$id") },
             )
