@@ -1,14 +1,21 @@
 package ch.bigli.passes
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,20 +23,63 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
+import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.PassDetailScreen
 import ch.bigli.passes.ui.PassDetailViewModel
 import ch.bigli.passes.ui.PassListScreen
 import ch.bigli.passes.ui.PassListViewModel
 import ch.bigli.passes.ui.theme.PassesTheme
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repo = (application as PassApp).repository
-        setContent { PassesTheme { AppNav(repo) } }
+        val app = application as PassApp
+        setContent { PassesTheme { AppNav(app) } }
+        handleIncomingPass(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingPass(intent)
+    }
+
+    /** Extracts a pass from a VIEW (file/content or walletpasses://) or SEND intent and imports it. */
+    private fun handleIncomingPass(intent: Intent?) {
+        val app = application as PassApp
+        val action = intent?.action
+        val viewUri: Uri? = if (action == Intent.ACTION_VIEW) intent.data else null
+
+        if (viewUri?.scheme == "walletpasses") {
+            val target = walletPassesTargetUrl(viewUri)
+            if (target == null) {
+                Toast.makeText(this, "Invalid pass link", Toast.LENGTH_LONG).show()
+                return
+            }
+            lifecycleScope.launch {
+                try {
+                    app.pendingPassId.value = app.repository.importFromUrl(target).id
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+
+        val uri: Uri? = when (action) {
+            Intent.ACTION_VIEW -> viewUri
+            Intent.ACTION_SEND -> @Suppress("DEPRECATION") (intent.getParcelableExtra(Intent.EXTRA_STREAM))
+            else -> null
+        }
+        if (uri == null) return
+        lifecycleScope.launch {
+            try {
+                app.pendingPassId.value = app.repository.importFromUri(uri).id
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, e.message ?: "Import failed", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 }
 
@@ -39,29 +89,33 @@ private class VmFactory(private val create: () -> ViewModel) : ViewModelProvider
 }
 
 @Composable
-private fun AppNav(repo: PassRepository) {
+private fun AppNav(app: PassApp) {
+    val repo: PassRepository = app.repository
     val nav = rememberNavController()
+
+    val pending by app.pendingPassId.collectAsState()
+    LaunchedEffect(pending) {
+        pending?.let { id ->
+            nav.navigate("detail/$id")
+            app.pendingPassId.value = null
+        }
+    }
+
     NavHost(nav, startDestination = "list") {
         composable("list") {
             val vm: PassListViewModel = viewModel(factory = VmFactory { PassListViewModel(repo) })
-            val context = androidx.compose.ui.platform.LocalContext.current
             val scope = rememberCoroutineScope()
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenDocument()
             ) { uri ->
                 if (uri != null) {
-                    val name = uri.lastPathSegment ?: "pass.pkpass"
                     scope.launch {
-                        val bytes = try {
-                            withContext(Dispatchers.IO) {
-                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            }
+                        try {
+                            val pass = repo.importFromUri(uri)
+                            app.pendingPassId.value = pass.id
                         } catch (e: Exception) {
-                            vm.reportError("Couldn't read file: ${e.message ?: "unknown error"}")
-                            return@launch
+                            vm.reportError(e.message ?: "Import failed")
                         }
-                        if (bytes != null) vm.importBytes(bytes, name)
-                        else vm.reportError("Couldn't read the selected file.")
                     }
                 }
             }
