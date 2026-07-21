@@ -28,6 +28,7 @@ data class Pass(
     val fields: List<PassField>,
     val barcode: Barcode?,
     val relevantDate: Instant?,
+    val expirationDate: Instant? = null,
     val rawFilePath: String,
     val sourceFormat: SourceFormat,
     val updateInfo: UpdateInfo?,

@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import ch.bigli.passes.data.MIGRATION_1_2
+import ch.bigli.passes.data.MIGRATION_2_3
 import ch.bigli.passes.data.PassDatabase
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.images.PassImageLoader
@@ -40,7 +41,7 @@ class PassApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         val db = Room.databaseBuilder(this, PassDatabase::class.java, "passes.db")
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
         repository = PassRepository(this, db.passDao(), PkPassImporter())
 

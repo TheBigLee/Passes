@@ -162,7 +162,9 @@ class PassRepository(
                     val merged = fresh.copy(
                         id = pass.id,
                         title = pass.title,
-                        voided = false,
+                        // Deliberately NOT forced to false: trust whatever the freshly re-imported
+                        // pass.json says, so an issuer that still declares the pass voided stays voided.
+                        voided = fresh.voided,
                         lastModified = conn.getHeaderField("Last-Modified") ?: pass.lastModified,
                     )
                     dao.insert(merged.toEntity())

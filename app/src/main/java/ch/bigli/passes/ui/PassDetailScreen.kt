@@ -154,6 +154,16 @@ fun PassDetailScreen(
                             .background(Color.Black.copy(alpha = 0.25f))
                             .padding(8.dp),
                     )
+                } else if (p.expirationDate?.isBefore(java.time.Instant.now()) == true) {
+                    Text(
+                        "This pass has expired",
+                        color = fg,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.25f))
+                            .padding(8.dp),
+                    )
                 }
                 strip?.let {
                     Image(

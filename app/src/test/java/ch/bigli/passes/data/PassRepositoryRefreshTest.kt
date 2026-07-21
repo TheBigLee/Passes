@@ -8,6 +8,7 @@ import ch.bigli.passes.importing.PkPassImporter
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,7 +41,12 @@ class PassRepositoryRefreshTest {
      * with a webServiceURL/authToken pointing at the given base, so refreshPass has something to
      * poll. The test server's port is random per run, so this can't be a static test resource.
      */
-    private fun buildPkPass(webServiceUrl: String, organizationName: String = "Acme", serial: String = "SN1"): ByteArray {
+    private fun buildPkPass(
+        webServiceUrl: String,
+        organizationName: String = "Acme",
+        serial: String = "SN1",
+        voided: Boolean = false,
+    ): ByteArray {
         val json = """
             {
               "formatVersion": 1,
@@ -51,6 +57,7 @@ class PassRepositoryRefreshTest {
               "description": "Test pass",
               "webServiceURL": "$webServiceUrl",
               "authenticationToken": "tok-123",
+              "voided": $voided,
               "generic": { "primaryFields": [] }
             }
         """.trimIndent()
@@ -123,6 +130,23 @@ class PassRepositoryRefreshTest {
         val result = repo.refreshPass(imported.id)
         assertTrue(result is RefreshResult.Error)
         assertEquals("Acme", repo.getById(imported.id)!!.organization)
+    }
+
+    @Test fun `refreshPass on 200 does not silently clear voided when the fresh pass json declares it`() = runTest {
+        // Imported while not yet voided; the issuer later republishes pass.json with voided: true
+        // (a static declaration, not a 410) and a successful 200 refresh must adopt that, not
+        // force it back to false.
+        val imported = repo.import(buildPkPass(base, voided = false), "test.pkpass")
+        assertFalse(repo.getById(imported.id)!!.voided)
+
+        server.respond(path) {
+            TestHttpServer.Response(200, buildPkPass(base, voided = true))
+        }
+
+        val result = repo.refreshPass(imported.id)
+        check(result is RefreshResult.Updated)
+        assertTrue(result.pass.voided)
+        assertTrue(repo.getById(imported.id)!!.voided)
     }
 
     @Test fun `refreshPass on a pass without updateInfo returns NotUpdatable without a network call`() = runTest {

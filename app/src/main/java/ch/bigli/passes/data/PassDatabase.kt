@@ -13,7 +13,14 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [PassEntity::class], version = 2, exportSchema = false)
+/** Adds the expirationDate column so expiry can be evaluated live at display time. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE passes ADD COLUMN expirationDateEpoch INTEGER")
+    }
+}
+
+@Database(entities = [PassEntity::class], version = 3, exportSchema = false)
 abstract class PassDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 }
