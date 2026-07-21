@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "ch.bigli.passes"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "ch.bigli.passes"
@@ -51,6 +51,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.androidx.activity.compose)
@@ -60,6 +61,10 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.zxing.core)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)

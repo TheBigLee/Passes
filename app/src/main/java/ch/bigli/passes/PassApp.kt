@@ -15,6 +15,9 @@ class PassApp : Application() {
     /** Set after an import so the NavHost navigates to the new pass; carries whether to open the title editor. */
     val pendingPass = MutableStateFlow<PendingPass?>(null)
 
+    /** A scanned barcode handed from ScanScreen to CreatePassScreen as a prefill; consumed once. */
+    val pendingScan = MutableStateFlow<ch.bigli.passes.domain.Barcode?>(null)
+
     /** Shared, process-wide image loader (in-memory cache) for pkpass logo/strip artwork. */
     val imageLoader = PassImageLoader()
 
