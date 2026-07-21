@@ -19,4 +19,14 @@ class PassDetailViewModel(private val repo: PassRepository, private val passId: 
     fun delete(onDone: () -> Unit) {
         viewModelScope.launch { repo.delete(passId); onDone() }
     }
+
+    /** Renames the pass and reflects the change on screen. Blank input is ignored. */
+    fun updateTitle(newTitle: String) {
+        val trimmed = newTitle.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            repo.updateTitle(passId, trimmed)
+            _pass.value = _pass.value?.copy(title = trimmed)
+        }
+    }
 }
