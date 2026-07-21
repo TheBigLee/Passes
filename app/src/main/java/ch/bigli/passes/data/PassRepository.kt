@@ -33,6 +33,12 @@ class PassRepository(
         dao.deleteById(id)
     }
 
+    /** Renames a pass. A blank/whitespace-only title is ignored so a pass can't be left untitled. */
+    suspend fun updateTitle(id: String, title: String) = withContext(Dispatchers.IO) {
+        val trimmed = title.trim()
+        if (trimmed.isNotEmpty()) dao.updateTitle(id, trimmed)
+    }
+
     /** Detects the format from [bytes], persists the raw file, imports, and stores the pass. */
     suspend fun import(bytes: ByteArray, displayName: String): Pass = withContext(Dispatchers.IO) {
         val (importer, ext) = when (detectPassFormat(bytes)) {
