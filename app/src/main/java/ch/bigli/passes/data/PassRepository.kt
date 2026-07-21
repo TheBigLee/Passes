@@ -1,6 +1,8 @@
 package ch.bigli.passes.data
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.importing.PkPassImporter
@@ -41,6 +43,24 @@ class PassRepository(
         }
         dao.insert(pass.toEntity())
         pass
+    }
+
+    /**
+     * Reads the bytes behind [uri] (a content:// or file:// document) off the main thread and
+     * imports them through [import]. Used by the file picker and by "Open with"/share intents.
+     */
+    suspend fun importFromUri(uri: Uri): Pass = withContext(Dispatchers.IO) {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw ImportError.CorruptFile("could not open $uri")
+        import(bytes, displayName(uri))
+    }
+
+    private fun displayName(uri: Uri): String {
+        val fromProvider = runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull()
+        return fromProvider ?: uri.lastPathSegment ?: "pass.pkpass"
     }
 
     private fun isPkPass(bytes: ByteArray, name: String): Boolean {

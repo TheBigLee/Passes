@@ -1,6 +1,7 @@
 package ch.bigli.passes.data
 
 import android.content.Context
+import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import ch.bigli.passes.domain.ImportError
@@ -14,6 +15,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import java.io.ByteArrayInputStream
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
@@ -48,5 +51,25 @@ class PassRepositoryTest {
             thrown = e
         }
         assertTrue(thrown is ImportError.UnsupportedFormat)
+    }
+
+    @Test fun `importFromUri reads content uri bytes and persists`() = runTest {
+        val uri = Uri.parse("content://test/sample.pkpass")
+        shadowOf(ctx.contentResolver).registerInputStream(uri, ByteArrayInputStream(fixture("sample.pkpass")))
+        val pass = repo.importFromUri(uri)
+        assertEquals("SWISS", pass.organization)
+        assertTrue(File(pass.rawFilePath).exists())
+        assertEquals(1, repo.observeAll().first().size)
+    }
+
+    @Test fun `importFromUri on non-pkpass throws UnsupportedFormat`() = runTest {
+        val uri = Uri.parse("content://test/note.txt")
+        shadowOf(ctx.contentResolver).registerInputStream(uri, ByteArrayInputStream("hello world".toByteArray()))
+        try {
+            repo.importFromUri(uri)
+            error("expected ImportError.UnsupportedFormat")
+        } catch (e: Exception) {
+            assertTrue(e is ImportError.UnsupportedFormat)
+        }
     }
 }
