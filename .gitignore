@@ -1,5 +1,6 @@
 .superpowers/
 *.iml
+*.jks
 .gradle/
 build/
 local.properties
