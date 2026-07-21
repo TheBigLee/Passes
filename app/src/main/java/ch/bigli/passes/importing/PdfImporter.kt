@@ -19,9 +19,8 @@ class PdfImporter(private val scanner: BarcodeScanner = BarcodeScanner()) : Pass
 
     override fun import(bytes: ByteArray, rawFilePath: String, displayName: String): Pass {
         val barcode = extractBarcode(File(rawFilePath)) ?: throw ImportError.NoBarcode(displayName)
-        val title = displayName
-            .removeSuffix(".pdf").removeSuffix(".PDF")
-            .ifBlank { "PDF ticket" }
+        val base = if (displayName.endsWith(".pdf", ignoreCase = true)) displayName.dropLast(4) else displayName
+        val title = base.ifBlank { "PDF ticket" }
         return Pass(
             id = UUID.randomUUID().toString(),
             type = PassType.GENERIC,
@@ -54,11 +53,16 @@ class PdfImporter(private val scanner: BarcodeScanner = BarcodeScanner()) : Pass
         }
         try {
             for (i in 0 until renderer.pageCount) {
-                renderer.openPage(i).use { page ->
-                    val bmp = renderPage(page)
-                    val found = scanner.scan(bmp)
-                    if (found != null) return found
+                val found = try {
+                    renderer.openPage(i).use { page ->
+                        scanner.scan(renderPage(page))
+                    }
+                } catch (e: ImportError) {
+                    throw e
+                } catch (e: Exception) {
+                    throw ImportError.CorruptFile("failed to render PDF page $i: ${e.message}")
                 }
+                if (found != null) return found
             }
             return null
         } finally {
