@@ -23,6 +23,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
+import ch.bigli.passes.images.PassImageLoader
 import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.PassDetailScreen
 import ch.bigli.passes.ui.PassDetailViewModel
@@ -91,6 +92,7 @@ private class VmFactory(private val create: () -> ViewModel) : ViewModelProvider
 @Composable
 private fun AppNav(app: PassApp) {
     val repo: PassRepository = app.repository
+    val imageLoader = app.imageLoader
     val nav = rememberNavController()
 
     val pending by app.pendingPassId.collectAsState()
@@ -121,6 +123,7 @@ private fun AppNav(app: PassApp) {
             }
             PassListScreen(
                 viewModel = vm,
+                imageLoader = imageLoader,
                 onImportClick = { picker.launch(arrayOf("*/*")) },
                 onPassClick = { id -> nav.navigate("detail/$id") },
             )
@@ -131,7 +134,7 @@ private fun AppNav(app: PassApp) {
         ) { entry ->
             val id = entry.arguments!!.getString("id")!!
             val vm: PassDetailViewModel = viewModel(factory = VmFactory { PassDetailViewModel(repo, id) })
-            PassDetailScreen(viewModel = vm, onBack = { nav.popBackStack() })
+            PassDetailScreen(viewModel = vm, imageLoader = imageLoader, onBack = { nav.popBackStack() })
         }
     }
 }
