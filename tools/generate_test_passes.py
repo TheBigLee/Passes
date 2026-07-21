@@ -6,9 +6,25 @@ not verify, so we omit them). Output: ../sample-passes/*.pkpass
 
 Run: python3 tools/generate_test_passes.py
 """
-import json, os, struct, zlib, zipfile
+import json, os, struct, subprocess, tempfile, zlib, zipfile
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "sample-passes")
+FONT = "/usr/share/fonts/TTF/JetBrainsMono-ExtraBold.ttf"
+
+def text_logo(text, w, h, fill="white"):
+    """Render [text] as a transparent-background PNG logo via ImageMagick (auto-fit size)."""
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        path = tmp.name
+    cmd = ["magick", "-background", "none", "-fill", fill, "-gravity", "center",
+           "-size", f"{w}x{h}"]
+    if os.path.exists(FONT):
+        cmd += ["-font", FONT]
+    cmd += [f"label:{text}", f"PNG32:{path}"]  # PNG32 keeps the alpha channel
+    subprocess.run(cmd, check=True)
+    with open(path, "rb") as fh:
+        data = fh.read()
+    os.unlink(path)
+    return data
 
 def png(w, h, rgb):
     """Minimal solid-colour PNG bytes (pure stdlib)."""
@@ -51,8 +67,8 @@ def build(name, *, bg, fg, org, desc, kind, structure, barcode_fmt, barcode_msg,
         "pass.json": json.dumps(pj, ensure_ascii=False, indent=2).encode("utf-8"),
         "icon.png": png(29, 29, logo_rgb),
         "icon@2x.png": png(58, 58, logo_rgb),
-        "logo.png": png(160, 50, logo_rgb),
-        "logo@2x.png": png(320, 100, logo_rgb),
+        "logo.png": text_logo(org, 160, 50),
+        "logo@2x.png": text_logo(org, 320, 100),
     }
     if strip_rgb:
         files["strip.png"] = png(375, 123, strip_rgb)
