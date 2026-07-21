@@ -83,8 +83,10 @@ fun PassListScreen(
 
 @Composable
 private fun PassCard(pass: Pass, onClick: () -> Unit) {
-    val bg = pass.bgColor?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
-    val fg = pass.fgColor?.let { Color(it) } ?: Color.White
+    val bgColor = pass.bgColor
+    val bg = bgColor?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
+    val fg = if (bgColor != null) Color(legibleTextColor(bgColor, pass.fgColor))
+             else pass.fgColor?.let { Color(it) } ?: Color.White
     Column(
         Modifier
             .fillMaxWidth()
