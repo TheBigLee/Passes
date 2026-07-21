@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 
 class PassRepository(
@@ -53,6 +55,31 @@ class PassRepository(
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw ImportError.CorruptFile("could not open $uri")
         import(bytes, displayName(uri))
+    }
+
+    /**
+     * Downloads a .pkpass from [url] (http/https) off the main thread and imports it. Used by the
+     * walletpasses:// "Add to Wallet" web flow. Throws [ImportError.CorruptFile] on a network/HTTP failure.
+     */
+    suspend fun importFromUrl(url: String): Pass = withContext(Dispatchers.IO) {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 15000
+            instanceFollowRedirects = true
+        }
+        val bytes = try {
+            val code = conn.responseCode
+            if (code !in 200..299) throw ImportError.CorruptFile("download failed: HTTP $code")
+            conn.inputStream.use { it.readBytes() }
+        } catch (e: ImportError) {
+            throw e
+        } catch (e: Exception) {
+            throw ImportError.CorruptFile("download failed: ${e.message}")
+        } finally {
+            conn.disconnect()
+        }
+        val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "pass.pkpass" }
+        import(bytes, name)
     }
 
     private fun displayName(uri: Uri): String {
