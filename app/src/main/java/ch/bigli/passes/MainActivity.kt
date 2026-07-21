@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModel
@@ -23,14 +24,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
+import ch.bigli.passes.domain.Barcode
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.images.PassImageLoader
 import ch.bigli.passes.importing.walletPassesTargetUrl
+import ch.bigli.passes.ui.CreatePassScreen
 import ch.bigli.passes.ui.PassDetailScreen
 import ch.bigli.passes.ui.PassDetailViewModel
 import ch.bigli.passes.ui.PassListScreen
 import ch.bigli.passes.ui.PassListViewModel
+import ch.bigli.passes.ui.ScanScreen
 import ch.bigli.passes.ui.theme.PassesTheme
 import kotlinx.coroutines.launch
 
@@ -129,7 +133,33 @@ private fun AppNav(app: PassApp) {
                 viewModel = vm,
                 imageLoader = imageLoader,
                 onImportClick = { picker.launch(arrayOf("*/*")) },
+                onScanClick = { nav.navigate("scan") },
+                onManualClick = { app.pendingScan.value = null; nav.navigate("create") },
                 onPassClick = { id -> nav.navigate("detail/$id") },
+            )
+        }
+        composable("scan") {
+            ScanScreen(
+                onScanned = { barcode ->
+                    app.pendingScan.value = barcode
+                    nav.navigate("create") { popUpTo("scan") { inclusive = true } }
+                },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable("create") {
+            val scope = rememberCoroutineScope()
+            val prefill: Barcode? = remember { app.pendingScan.value }
+            CreatePassScreen(
+                prefill = prefill,
+                onCreate = { title, format, value ->
+                    scope.launch {
+                        val pass = repo.createManualPass(title, format, value)
+                        app.pendingScan.value = null
+                        nav.navigate("detail/${pass.id}") { popUpTo("list") }
+                    }
+                },
+                onBack = { app.pendingScan.value = null; nav.popBackStack() },
             )
         }
         composable(
