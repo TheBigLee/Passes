@@ -12,8 +12,8 @@ class PassApp : Application() {
     lateinit var repository: PassRepository
         private set
 
-    /** Set to a pass id when an import should navigate to that pass's detail screen; NavHost observes and clears it. */
-    val pendingPassId = MutableStateFlow<String?>(null)
+    /** Set after an import so the NavHost navigates to the new pass; carries whether to open the title editor. */
+    val pendingPass = MutableStateFlow<PendingPass?>(null)
 
     /** Shared, process-wide image loader (in-memory cache) for pkpass logo/strip artwork. */
     val imageLoader = PassImageLoader()
@@ -24,3 +24,6 @@ class PassApp : Application() {
         repository = PassRepository(this, db.passDao(), PkPassImporter())
     }
 }
+
+/** A just-imported pass to navigate to. [editTitle] auto-opens the rename dialog (used for PDF imports). */
+data class PendingPass(val id: String, val editTitle: Boolean)
