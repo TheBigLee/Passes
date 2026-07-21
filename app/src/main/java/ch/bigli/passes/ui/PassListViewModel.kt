@@ -18,6 +18,10 @@ class PassListViewModel(private val repo: PassRepository) : ViewModel() {
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errors: SharedFlow<String> = _errors
 
+    fun reportError(message: String) {
+        _errors.tryEmit(message)
+    }
+
     fun importBytes(bytes: ByteArray, displayName: String) {
         viewModelScope.launch {
             try {

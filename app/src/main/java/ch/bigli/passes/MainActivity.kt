@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,6 +21,9 @@ import ch.bigli.passes.ui.PassDetailViewModel
 import ch.bigli.passes.ui.PassListScreen
 import ch.bigli.passes.ui.PassListViewModel
 import ch.bigli.passes.ui.theme.PassesTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,13 +45,24 @@ private fun AppNav(repo: PassRepository) {
         composable("list") {
             val vm: PassListViewModel = viewModel(factory = VmFactory { PassListViewModel(repo) })
             val context = androidx.compose.ui.platform.LocalContext.current
+            val scope = rememberCoroutineScope()
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenDocument()
             ) { uri ->
                 if (uri != null) {
                     val name = uri.lastPathSegment ?: "pass.pkpass"
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    if (bytes != null) vm.importBytes(bytes, name)
+                    scope.launch {
+                        val bytes = try {
+                            withContext(Dispatchers.IO) {
+                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            }
+                        } catch (e: Exception) {
+                            vm.reportError("Couldn't read file: ${e.message ?: "unknown error"}")
+                            return@launch
+                        }
+                        if (bytes != null) vm.importBytes(bytes, name)
+                        else vm.reportError("Couldn't read the selected file.")
+                    }
                 }
             }
             PassListScreen(
