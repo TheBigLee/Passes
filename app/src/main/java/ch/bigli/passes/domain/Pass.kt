@@ -31,4 +31,6 @@ data class Pass(
     val rawFilePath: String,
     val sourceFormat: SourceFormat,
     val updateInfo: UpdateInfo?,
+    val voided: Boolean = false,
+    val lastModified: String? = null,
 )

@@ -2,6 +2,7 @@ package ch.bigli.passes
 
 import android.app.Application
 import androidx.room.Room
+import ch.bigli.passes.data.MIGRATION_1_2
 import ch.bigli.passes.data.PassDatabase
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.images.PassImageLoader
@@ -23,7 +24,9 @@ class PassApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        val db = Room.databaseBuilder(this, PassDatabase::class.java, "passes.db").build()
+        val db = Room.databaseBuilder(this, PassDatabase::class.java, "passes.db")
+            .addMigrations(MIGRATION_1_2)
+            .build()
         repository = PassRepository(this, db.passDao(), PkPassImporter())
     }
 }
