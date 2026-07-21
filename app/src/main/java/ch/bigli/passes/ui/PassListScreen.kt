@@ -154,6 +154,9 @@ private fun PassCard(pass: Pass, imageLoader: PassImageLoader, onClick: () -> Un
             color = fg.copy(alpha = 0.85f), fontSize = 11.sp,
         )
         Text(pass.title, color = fg, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        if (pass.voided) {
+            Text("VOIDED", color = fg.copy(alpha = 0.9f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
         val summary = pass.fields.filter { it.position != FieldPosition.PRIMARY }
             .take(3).joinToString("   ") { "${it.label}: ${it.value}" }
         if (summary.isNotEmpty()) {
