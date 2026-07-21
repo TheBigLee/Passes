@@ -66,8 +66,9 @@ fun PassDetailScreen(
     }
 
     val p = pass
-    val bg = p?.bgColor?.let { Color(it) } ?: Color(0xFF1A73E8)
-    val fg = p?.fgColor?.let { Color(it) } ?: Color.White
+    val bgColor = p?.bgColor
+    val bg = bgColor?.let { Color(it) } ?: Color(0xFF1A73E8)
+    val fg = if (bgColor != null) Color(legibleTextColor(bgColor, p?.fgColor)) else Color.White
 
     Scaffold(
         containerColor = bg,
