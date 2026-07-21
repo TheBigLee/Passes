@@ -3,8 +3,11 @@ package ch.bigli.passes.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import ch.bigli.passes.domain.Barcode
+import ch.bigli.passes.domain.BarcodeFormat
 import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.importing.PassImporter
 import ch.bigli.passes.importing.PdfImporter
@@ -38,6 +41,28 @@ class PassRepository(
         val trimmed = title.trim()
         if (trimmed.isNotEmpty()) dao.updateTitle(id, trimmed)
     }
+
+    /** Creates a pass from a manually-entered or scanned barcode (no source file). */
+    suspend fun createManualPass(title: String, format: BarcodeFormat, value: String): Pass =
+        withContext(Dispatchers.IO) {
+            val pass = Pass(
+                id = UUID.randomUUID().toString(),
+                type = PassType.GENERIC,
+                title = title.trim(),
+                subtitle = null,
+                organization = null,
+                bgColor = null,
+                fgColor = null,
+                fields = emptyList(),
+                barcode = Barcode(format, value, null),
+                relevantDate = null,
+                rawFilePath = "",
+                sourceFormat = SourceFormat.MANUAL,
+                updateInfo = null,
+            )
+            dao.insert(pass.toEntity())
+            pass
+        }
 
     /** Detects the format from [bytes], persists the raw file, imports, and stores the pass. */
     suspend fun import(bytes: ByteArray, displayName: String): Pass = withContext(Dispatchers.IO) {
