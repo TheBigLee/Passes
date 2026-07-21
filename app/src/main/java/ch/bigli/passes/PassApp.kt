@@ -5,10 +5,14 @@ import androidx.room.Room
 import ch.bigli.passes.data.PassDatabase
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.importing.PkPassImporter
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class PassApp : Application() {
     lateinit var repository: PassRepository
         private set
+
+    /** Set to a pass id when an import should navigate to that pass's detail screen; NavHost observes and clears it. */
+    val pendingPassId = MutableStateFlow<String?>(null)
 
     override fun onCreate() {
         super.onCreate()

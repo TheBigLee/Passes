@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 class PassListViewModel(private val repo: PassRepository) : ViewModel() {
     val passes: StateFlow<List<Pass>> =
@@ -20,15 +19,5 @@ class PassListViewModel(private val repo: PassRepository) : ViewModel() {
 
     fun reportError(message: String) {
         _errors.tryEmit(message)
-    }
-
-    fun importBytes(bytes: ByteArray, displayName: String) {
-        viewModelScope.launch {
-            try {
-                repo.import(bytes, displayName)
-            } catch (e: Exception) {
-                _errors.emit(e.message ?: "Import failed")
-            }
-        }
     }
 }
