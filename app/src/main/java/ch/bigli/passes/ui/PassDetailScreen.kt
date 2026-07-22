@@ -8,10 +8,13 @@ import android.text.util.Linkify
 import android.util.Patterns
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -54,16 +58,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
@@ -72,6 +83,11 @@ import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
+
+/** A plain (non-Compose-state) mutable box, so writing to [value] doesn't trigger recomposition. */
+private class BoundsHolder {
+    var value: Rect? = null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,76 +136,167 @@ fun PassDetailScreen(
 
     val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f, animationSpec = tween(600), label = "cardFlip")
 
-    Scaffold(
-        containerColor = bg,
-        topBar = {
-            TopAppBar(
-                title = {
-                    val currentLogo = logo
-                    if (currentLogo != null) {
-                        Image(
-                            currentLogo.asImageBitmap(),
-                            contentDescription = p?.organization,
-                            modifier = Modifier.height(28.dp),
-                            contentScale = ContentScale.Fit,
+    // Fullscreen barcode: rendered once here (not inside PassFrontContent) so the exact same
+    // Bitmap backs both the small inline display and the large fullscreen overlay below - no
+    // re-render step, no quality loss when it grows.
+    val barcodeRenderer = remember { BarcodeRenderer() }
+    val barcodeBitmap = remember(p?.barcode) {
+        p?.barcode?.let { bc ->
+            val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
+            if (square) barcodeRenderer.render(bc, 1200, 1200) else barcodeRenderer.render(bc, 1600, 600)
+        }
+    }
+    var fullscreenBarcode by remember { mutableStateOf(false) }
+    var barcodeSourceBounds by remember { mutableStateOf<Rect?>(null) }
+    var rootBounds by remember { mutableStateOf<Rect?>(null) }
+    // The inline barcode sits inside a scrollable column, so its on-screen position changes on
+    // every scroll frame. Tracking that continuously in Compose state (as barcodeSourceBounds
+    // does) would recompose the whole screen while scrolling; instead the latest position is
+    // stashed in a plain (non-state) holder, and only committed into real state once - at the
+    // moment of the tap that actually needs it.
+    val latestBarcodeBounds = remember { BoundsHolder() }
+    val barcodeProgress by animateFloatAsState(
+        targetValue = if (fullscreenBarcode) 1f else 0f,
+        animationSpec = tween(300),
+        label = "barcodeFullscreen",
+    )
+    BackHandler(enabled = fullscreenBarcode) { fullscreenBarcode = false }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { rootBounds = Rect(Offset.Zero, it.size.toSize()) },
+    ) {
+        Scaffold(
+            containerColor = bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        val currentLogo = logo
+                        if (currentLogo != null) {
+                            Image(
+                                currentLogo.asImageBitmap(),
+                                contentDescription = p?.organization,
+                                modifier = Modifier.height(28.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        } else {
+                            Text(p?.organization ?: "")
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = fg)
+                        }
+                    },
+                    actions = {
+                        if (flipped) {
+                            TextButton(onClick = { viewModel.delete(onBack) }) {
+                                Text("Delete", color = fg)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = bg, titleContentColor = fg),
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbar) },
+        ) { padding ->
+            if (p == null) return@Scaffold
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            rotationY = rotation
+                            cameraDistance = 8 * density
+                        },
+                ) {
+                    if (rotation <= 90f) {
+                        PassFrontContent(
+                            pass = p,
+                            bg = bg,
+                            fg = fg,
+                            strip = strip,
+                            isRefreshing = isRefreshing,
+                            onRefresh = { viewModel.refresh() },
+                            barcodeBitmap = barcodeBitmap,
+                            barcodeHidden = barcodeProgress > 0f,
+                            onBarcodeTap = {
+                                barcodeSourceBounds = latestBarcodeBounds.value
+                                fullscreenBarcode = true
+                            },
+                            onBarcodeBoundsChanged = { latestBarcodeBounds.value = it },
                         )
                     } else {
-                        Text(p?.organization ?: "")
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = fg)
-                    }
-                },
-                actions = {
-                    if (flipped) {
-                        TextButton(onClick = { viewModel.delete(onBack) }) {
-                            Text("Delete", color = fg)
+                        Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
+                            PassBackContent(pass = p, bg = bg, fg = fg)
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = bg, titleContentColor = fg),
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        if (p == null) return@Scaffold
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        rotationY = rotation
-                        cameraDistance = 8 * density
-                    },
-            ) {
-                if (rotation <= 90f) {
-                    PassFrontContent(
-                        pass = p,
-                        bg = bg,
-                        fg = fg,
-                        strip = strip,
-                        isRefreshing = isRefreshing,
-                        onRefresh = { viewModel.refresh() },
-                    )
-                } else {
-                    Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
-                        PassBackContent(pass = p, bg = bg, fg = fg)
-                    }
+                }
+                IconButton(
+                    onClick = { flipped = !flipped },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f)),
+                ) {
+                    Icon(Icons.Filled.Info, contentDescription = if (flipped) "Show front of pass" else "Show back of pass", tint = fg)
                 }
             }
-            IconButton(
-                onClick = { flipped = !flipped },
+        }
+
+        val bmp = barcodeBitmap
+        val source = barcodeSourceBounds
+        val target = rootBounds
+        if (bmp != null && source != null && target != null && barcodeProgress > 0f) {
+            FullscreenBarcodeOverlay(
+                bitmap = bmp,
+                sourceBounds = source,
+                targetBounds = target,
+                progress = barcodeProgress,
+                onDismiss = { fullscreenBarcode = false },
+            )
+        }
+    }
+}
+
+/**
+ * Renders [bitmap] positioned/sized by interpolating between [sourceBounds] (the inline barcode's
+ * captured on-screen position) and [targetBounds] (the whole screen), driven by [progress]
+ * (0f = collapsed at sourceBounds, 1f = fullscreen). Lives outside the Scaffold's content padding
+ * so it can visually grow over the TopAppBar too - genuinely fullscreen, not just the content area.
+ */
+@Composable
+private fun FullscreenBarcodeOverlay(
+    bitmap: Bitmap,
+    sourceBounds: Rect,
+    targetBounds: Rect,
+    progress: Float,
+    onDismiss: () -> Unit,
+) {
+    val topLeft = lerp(sourceBounds.topLeft, targetBounds.topLeft, progress)
+    val size = lerp(sourceBounds.size, targetBounds.size, progress)
+    val density = LocalDensity.current
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.White.copy(alpha = progress))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            ),
+    ) {
+        with(density) {
+            Image(
+                bitmap.asImageBitmap(),
+                contentDescription = "Barcode",
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.25f)),
-            ) {
-                Icon(Icons.Filled.Info, contentDescription = if (flipped) "Show front of pass" else "Show back of pass", tint = fg)
-            }
+                    .offset(x = topLeft.x.toDp(), y = topLeft.y.toDp())
+                    .size(width = size.width.toDp(), height = size.height.toDp()),
+            )
         }
     }
 }
@@ -203,6 +310,10 @@ private fun PassFrontContent(
     strip: Bitmap?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    barcodeBitmap: Bitmap?,
+    barcodeHidden: Boolean,
+    onBarcodeTap: () -> Unit,
+    onBarcodeBoundsChanged: (Rect) -> Unit,
 ) {
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -234,11 +345,6 @@ private fun PassFrontContent(
                 }
                 Spacer(Modifier.size(32.dp))
                 pass.barcode?.let { bc ->
-                    val renderer = remember { BarcodeRenderer() }
-                    val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
-                    val bmp = remember(bc) {
-                        if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
-                    }
                     Column(
                         Modifier
                             .clip(RoundedCornerShape(12.dp))
@@ -247,7 +353,23 @@ private fun PassFrontContent(
                             .alpha(if (isVoidedOrExpired) 0.35f else 1f),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
+                        if (barcodeBitmap != null) {
+                            Image(
+                                barcodeBitmap.asImageBitmap(),
+                                // Null while the fullscreen overlay owns the same "Barcode"
+                                // description, so accessibility services don't announce it twice.
+                                contentDescription = if (barcodeHidden) null else "Barcode",
+                                modifier = Modifier
+                                    .size(240.dp)
+                                    .alpha(if (barcodeHidden) 0f else 1f)
+                                    .onGloballyPositioned { onBarcodeBoundsChanged(it.boundsInRoot()) }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onBarcodeTap,
+                                    ),
+                            )
+                        }
                         if (pass.voided) {
                             Text(
                                 "This pass has been voided by the issuer",
