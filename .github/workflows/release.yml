@@ -67,6 +67,28 @@ jobs:
       - name: Name the APK after the version
         run: cp app/build/outputs/apk/release/app-release.apk "Passes-${{ steps.ver.outputs.tag }}.apk"
 
+      - name: Resolve previous release tag
+        id: prev
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          # Explicitly resolve the previous *published GitHub Release*'s tag, rather than
+          # letting release-changelog-builder-action auto-detect it. On a tag-push trigger, the
+          # new tag (e.g. v0.5.0) already exists as a real git ref by the time this job starts -
+          # that's what triggered it - so an auto-detected "previous tag" can resolve to the
+          # current tag itself (comparing it to its own commit, yielding an empty changelog).
+          # `gh release list` only sees releases published by a prior run of this workflow, so it
+          # can't see the not-yet-created current release and reliably names something older.
+          # Not fatal if this fails or finds nothing (e.g. the very first release ever) - the
+          # changelog step below tolerates an empty fromTag the same way it already tolerates
+          # its own failure.
+          PREV=$(gh release list --limit 50 --json tagName,createdAt \
+            --jq --arg current "$CURRENT_TAG" \
+            '[.[] | select(.tagName != $current)] | sort_by(.createdAt) | last | .tagName // empty')
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+
       - name: Build changelog
         id: build_changelog
         continue-on-error: true
@@ -74,9 +96,9 @@ jobs:
         with:
           # Use the current commit, not the tag name: on workflow_dispatch the tag doesn't
           # exist as a real git ref yet (it's only created below by action-gh-release), so
-          # resolving it here would fail. fromTag is left unset - the action auto-detects the
-          # previous release/tag as the range start.
+          # resolving it here would fail.
           toTag: ${{ github.sha }}
+          fromTag: ${{ steps.prev.outputs.tag }}
           configuration: .github/release-changelog-builder-config.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
