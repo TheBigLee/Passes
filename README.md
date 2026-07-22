@@ -2,6 +2,10 @@
 
 Native Android pass wallet. Store, view, and auto-update passes — no Google/Apple account needed.
 
+> [!WARNING]
+> This app has been written by Claude code without human verification or review (so far).
+> Use it at your own risk!!!
+
 ## Features
 
 - **Import `.pkpass` files** (Apple Wallet format) — parses `pass.json`, images, barcode, fields.
