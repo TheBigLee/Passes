@@ -51,3 +51,19 @@ Points to investigate when picked up:
   (`logo.png`, `strip.png`, etc.) can also have per-`.lproj` overrides.
 - **Scope:** decide whether to support live language switching in-app or just pick once at
   import time based on the device locale at that moment.
+
+## Support pkpass "back fields"
+
+Apple's pkpass format lets a pass declare `backFields` (in addition to header/primary/
+secondary/auxiliary fields) — extra key/value info meant to be shown on the "back" of the pass,
+revealed by tapping/flipping it. `PkPassImporter`/`Pass` currently don't parse or store
+`backFields` at all, so this information is silently dropped on import.
+
+Points to investigate when picked up:
+- **Data model:** parse `backFields` in `PkPassJson`/`PkPassImporter` similarly to the existing
+  field positions, and add a place to store them on `Pass` (a new `backFields: List<PassField>`,
+  reusing `FieldPosition` or a dedicated marker).
+- **UI:** add a flip/reveal affordance on `PassDetailScreen` (e.g. a button or tap-to-flip
+  animation) that shows the back-field content, then flips back.
+- **Scope:** manually-entered/PDF passes have no natural source for back fields — this is
+  pkpass-only for now.
