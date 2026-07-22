@@ -1,3 +1,29 @@
+# Fullscreen Barcode/QR Code Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **Every gradle command in this repo must be run bare — `./gradlew <task>`, no `JAVA_HOME` prefix. That override is obsolete here (Gradle 9.5's daemon toolchain resolves its own JDK) — do not use it.**
+
+**Goal:** Tapping the barcode on `PassDetailScreen` grows it into a fullscreen, plain-white view via a continuous animated transform (not a fade or a separate dialog), and shrinks it back the same way on dismissal.
+
+**Architecture:** The barcode `Bitmap` is rendered once at `PassDetailScreen` level (larger resolution than today) so the same bitmap backs both the small inline image and the large fullscreen overlay. Tapping the inline image captures its on-screen bounds and flips a boolean; an `animateFloatAsState`-driven progress value interpolates between the inline bounds and the whole-screen bounds using `androidx.compose.ui.geometry.lerp`, rendered via a plain overlay `Box` hoisted above the `Scaffold` (not a `Dialog`, since a `Dialog` is a separate window and can't visually grow from a specific on-screen position).
+
+**Tech Stack:** Kotlin, Jetpack Compose (Material 3), no new dependencies (`BackHandler` comes from the already-present `androidx.activity:activity-compose`).
+
+---
+
+### Task 1: Fullscreen barcode overlay in PassDetailScreen
+
+**Files:**
+- Modify: `app/src/main/java/ch/bigli/passes/ui/PassDetailScreen.kt`
+
+This is UI-only Compose code with no extractable pure-logic component (the interpolation is a
+direct standard-library `lerp` call) — per the design doc's Testing section, there's no unit test
+to write first. Verification is: the file compiles, the full existing test suite still passes
+(nothing here should break `PassDetailScreenTest.kt`'s `isBareUrlOrEmail` tests or any other
+existing test), and a manual on-device check (Task 2).
+
+- [ ] **Step 1: Replace the full contents of `PassDetailScreen.kt`**
+
+```kotlin
 package ch.bigli.passes.ui
 
 import android.app.Activity
@@ -11,7 +37,6 @@ import android.widget.TextView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,13 +46,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,7 +73,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,11 +86,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -75,17 +96,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,12 +109,6 @@ import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
-import kotlin.math.roundToInt
-
-/** A plain (non-Compose-state) mutable box, so writing to [value] doesn't trigger recomposition. */
-private class BoundsHolder {
-    var value: Rect? = null
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,30 +160,21 @@ fun PassDetailScreen(
     // Fullscreen barcode: rendered once here (not inside PassFrontContent) so the exact same
     // Bitmap backs both the small inline display and the large fullscreen overlay below - no
     // re-render step, no quality loss when it grows.
-    val isSquareBarcode = p?.barcode?.format == BarcodeFormat.QR || p?.barcode?.format == BarcodeFormat.AZTEC
     val barcodeRenderer = remember { BarcodeRenderer() }
     val barcodeBitmap = remember(p?.barcode) {
         p?.barcode?.let { bc ->
-            if (isSquareBarcode) barcodeRenderer.render(bc, 1200, 1200) else barcodeRenderer.render(bc, 1600, 600)
+            val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
+            if (square) barcodeRenderer.render(bc, 1200, 1200) else barcodeRenderer.render(bc, 1600, 600)
         }
     }
     var fullscreenBarcode by remember { mutableStateOf(false) }
     var barcodeSourceBounds by remember { mutableStateOf<Rect?>(null) }
     var rootBounds by remember { mutableStateOf<Rect?>(null) }
-    // The inline barcode sits inside a scrollable column, so its on-screen position changes on
-    // every scroll frame. Tracking that continuously in Compose state (as barcodeSourceBounds
-    // does) would recompose the whole screen while scrolling; instead the latest position is
-    // stashed in a plain (non-state) holder, and only committed into real state once - at the
-    // moment of the tap that actually needs it.
-    val latestBarcodeBounds = remember { BoundsHolder() }
     val barcodeProgress by animateFloatAsState(
         targetValue = if (fullscreenBarcode) 1f else 0f,
         animationSpec = tween(300),
         label = "barcodeFullscreen",
     )
-    // Reading barcodeProgress directly for barcodeHidden would recompose PassFrontContent on
-    // every animation frame; derivedStateOf only invalidates when the boolean actually flips.
-    val barcodeHidden by remember { derivedStateOf { barcodeProgress > 0f } }
     BackHandler(enabled = fullscreenBarcode) { fullscreenBarcode = false }
 
     Box(
@@ -239,12 +235,9 @@ fun PassDetailScreen(
                             isRefreshing = isRefreshing,
                             onRefresh = { viewModel.refresh() },
                             barcodeBitmap = barcodeBitmap,
-                            barcodeHidden = barcodeHidden,
-                            onBarcodeTap = {
-                                barcodeSourceBounds = latestBarcodeBounds.value
-                                fullscreenBarcode = true
-                            },
-                            onBarcodeBoundsChanged = { latestBarcodeBounds.value = it },
+                            barcodeHidden = fullscreenBarcode,
+                            onBarcodeTap = { fullscreenBarcode = true },
+                            onBarcodeBoundsChanged = { barcodeSourceBounds = it },
                         )
                     } else {
                         Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
@@ -275,8 +268,6 @@ fun PassDetailScreen(
                 sourceBounds = source,
                 targetBounds = target,
                 progress = barcodeProgress,
-                rotateToLandscape = !isSquareBarcode,
-                altText = p?.barcode?.altText,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -285,15 +276,9 @@ fun PassDetailScreen(
 
 /**
  * Renders [bitmap] positioned/sized by interpolating between [sourceBounds] (the inline barcode's
- * captured on-screen position) and a fullscreen target, driven by [progress] (0f = collapsed at
- * sourceBounds, 1f = fullscreen). Lives outside the Scaffold's content padding so it can visually
- * grow over the TopAppBar too - genuinely fullscreen, not just the content area.
- *
- * When [rotateToLandscape] is true (non-square formats - PDF417/Code128), the target box is
- * centered and sized to the bitmap's own aspect ratio, scaled so that its footprint *after* a 90°
- * rotation fits the screen - a wide, short barcode's long axis then runs along the screen's much
- * longer height, letting it render far bigger than fitting it unrotated ever could. Square formats
- * (QR/Aztec) gain nothing from this, so they always target the plain full-screen rect, unrotated.
+ * captured on-screen position) and [targetBounds] (the whole screen), driven by [progress]
+ * (0f = collapsed at sourceBounds, 1f = fullscreen). Lives outside the Scaffold's content padding
+ * so it can visually grow over the TopAppBar too - genuinely fullscreen, not just the content area.
  */
 @Composable
 private fun FullscreenBarcodeOverlay(
@@ -301,47 +286,11 @@ private fun FullscreenBarcodeOverlay(
     sourceBounds: Rect,
     targetBounds: Rect,
     progress: Float,
-    rotateToLandscape: Boolean,
-    altText: String?,
     onDismiss: () -> Unit,
 ) {
-    // targetBounds is the raw Compose window size, which on an edge-to-edge window includes the
-    // area the status/navigation bars visually draw over. Shrinking it to the actual system-bars
-    // safe area keeps the (possibly rotated) barcode from appearing to run off-screen under them.
+    val topLeft = lerp(sourceBounds.topLeft, targetBounds.topLeft, progress)
+    val size = lerp(sourceBounds.size, targetBounds.size, progress)
     val density = LocalDensity.current
-    val layoutDirection = LocalLayoutDirection.current
-    val systemBars = WindowInsets.systemBars
-    val safeBounds = Rect(
-        left = targetBounds.left + systemBars.getLeft(density, layoutDirection),
-        top = targetBounds.top + systemBars.getTop(density),
-        right = targetBounds.right - systemBars.getRight(density, layoutDirection),
-        bottom = targetBounds.bottom - systemBars.getBottom(density),
-    )
-    // Scales the bitmap's own (unswapped) aspect ratio to fit within safeBounds, centered,
-    // without stretching. [constraintWidth]/[constraintHeight] are what the scale is computed
-    // against - for the landscape case these are the bitmap's dimensions SWAPPED, since
-    // rotationZ will swap the box's visual footprint right back once applied, so it's the
-    // POST-rotation footprint that actually needs to fit the screen, even though the box itself
-    // (pre-rotation) always keeps the bitmap's true width/height.
-    fun centeredFit(constraintWidth: Float, constraintHeight: Float): Rect {
-        val scale = minOf(safeBounds.width / constraintWidth, safeBounds.height / constraintHeight)
-        val boxSize = Size(bitmap.width * scale, bitmap.height * scale)
-        val topLeft = Offset(
-            safeBounds.center.x - boxSize.width / 2f,
-            safeBounds.center.y - boxSize.height / 2f,
-        )
-        return Rect(topLeft, boxSize)
-    }
-    val target = if (rotateToLandscape) {
-        centeredFit(constraintWidth = bitmap.height.toFloat(), constraintHeight = bitmap.width.toFloat())
-    } else {
-        centeredFit(constraintWidth = bitmap.width.toFloat(), constraintHeight = bitmap.height.toFloat())
-    }
-    val topLeft = lerp(sourceBounds.topLeft, target.topLeft, progress)
-    val size = lerp(sourceBounds.size, target.size, progress)
-    val rotation = if (rotateToLandscape) 90f * progress else 0f
-    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    val textMeasurer = rememberTextMeasurer()
     Box(
         Modifier
             .fillMaxSize()
@@ -352,48 +301,14 @@ private fun FullscreenBarcodeOverlay(
                 onClick = onDismiss,
             ),
     ) {
-        // Drawn directly on a Canvas (rather than an Image with an offset+size+graphicsLayer
-        // modifier chain) so the rotation pivot is an explicit, unambiguous Offset in the same
-        // absolute coordinate space as topLeft/size/safeBounds - no reliance on how nested
-        // layout/placement/graphicsLayer modifiers interact with constraints. altText (if any) is
-        // drawn in the SAME rotate {} block as the barcode image, immediately below it in the
-        // pre-rotation coordinate space, so it's physically locked to the barcode - rotating and
-        // moving with it as a single unit through the whole animation, exactly like the caption
-        // on a real Wallet-app barcode card, rather than being tracked/positioned separately.
-        Canvas(
-            Modifier
-                .fillMaxSize()
-                // altText is included here (not just drawn as pixels) so screen-reader users get
-                // the same caption sighted users see - Canvas has no per-drawing-call semantics.
-                .semantics { contentDescription = if (altText != null) "Barcode, $altText" else "Barcode" },
-        ) {
-            val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
-            val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
-            val captionGap = 16.dp.toPx()
-            val textLayout = altText?.let {
-                textMeasurer.measure(
-                    text = it,
-                    style = TextStyle(color = Color.Black, fontSize = 12.sp, textAlign = TextAlign.Center),
-                    // fixedWidth, not maxWidth alone: a min of 0 would let the layout shrink to
-                    // the text's own natural (short) width, leaving textAlign=Center nothing to
-                    // center within - it needs to actually BE the full barcode width.
-                    constraints = Constraints.fixedWidth(dstSize.width),
-                )
-            }
-            fun drawBarcodeAndCaption() {
-                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
-                if (textLayout != null) {
-                    drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + captionGap))
-                }
-            }
-            if (rotation == 0f) {
-                drawBarcodeAndCaption()
-            } else {
-                val pivot = Offset(topLeft.x + size.width / 2f, topLeft.y + size.height / 2f)
-                rotate(degrees = rotation, pivot = pivot) {
-                    drawBarcodeAndCaption()
-                }
-            }
+        with(density) {
+            Image(
+                bitmap.asImageBitmap(),
+                contentDescription = "Barcode",
+                modifier = Modifier
+                    .offset(x = topLeft.x.toDp(), y = topLeft.y.toDp())
+                    .size(width = size.width.toDp(), height = size.height.toDp()),
+            )
         }
     }
 }
@@ -451,24 +366,11 @@ private fun PassFrontContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         if (barcodeBitmap != null) {
-                            // Sized to the bitmap's own aspect ratio within a 240dp box, rather
-                            // than a fixed 240x240 square - a wide/short PDF417/Code128 bitmap in
-                            // a square box would otherwise be letterboxed by Image's default
-                            // ContentScale.Fit, leaving invisible empty space below the visible
-                            // barcode that pushed the alt text/voided-expired text too far away.
-                            val aspect = barcodeBitmap.width.toFloat() / barcodeBitmap.height.toFloat()
-                            val (imageWidth, imageHeight) = if (aspect >= 1f) {
-                                240.dp to 240.dp / aspect
-                            } else {
-                                240.dp * aspect to 240.dp
-                            }
                             Image(
                                 barcodeBitmap.asImageBitmap(),
-                                // Null while the fullscreen overlay owns the same "Barcode"
-                                // description, so accessibility services don't announce it twice.
-                                contentDescription = if (barcodeHidden) null else "Barcode",
+                                contentDescription = "Barcode",
                                 modifier = Modifier
-                                    .size(width = imageWidth, height = imageHeight)
+                                    .size(240.dp)
                                     .alpha(if (barcodeHidden) 0f else 1f)
                                     .onGloballyPositioned { onBarcodeBoundsChanged(it.boundsInRoot()) }
                                     .clickable(
@@ -575,3 +477,64 @@ private fun HtmlText(html: String, color: Color, fontSize: TextUnit, modifier: M
         },
     )
 }
+```
+
+- [ ] **Step 2: Run the full test suite to verify nothing broke**
+
+Run: `./gradlew :app:testDebugUnitTest`
+Expected: BUILD SUCCESSFUL — nothing in this change touches domain/data/importer code, and
+`PassDetailScreenTest.kt`'s `isBareUrlOrEmail` tests are unaffected (that function and `HtmlText`
+are untouched by this diff other than moving further down the file).
+
+- [ ] **Step 3: Build the debug APK to catch any Compose compile errors**
+
+Run: `./gradlew :app:assembleDebug`
+Expected: BUILD SUCCESSFUL.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src/main/java/ch/bigli/passes/ui/PassDetailScreen.kt
+git commit -m "feat: fullscreen barcode with animated grow/shrink transition"
+```
+
+---
+
+### Task 2: Device verification
+
+Not a code task — manual checks on the real Pixel device before merging.
+
+- [ ] **Step 1: Build and install**
+
+Run: `./gradlew :app:installDebug`
+
+- [ ] **Step 2: Verify the grow animation**
+
+Open a pass with a barcode. Tap the barcode. Confirm:
+- It visibly grows from its exact inline position/size to fill the whole screen (including
+  covering the top app bar), ending on a plain white background.
+- The barcode stays crisp at fullscreen size — no visible blur or re-render pop.
+- Works correctly for both a square format (QR/Aztec) and a non-square one (PDF417/Code128)
+  without stretching.
+
+- [ ] **Step 3: Verify dismissal**
+
+- Tap anywhere on the fullscreen barcode: it shrinks back down to exactly its original inline
+  position/size, without a visible jump.
+- Repeat, but dismiss via the system back button instead of a tap: same shrink animation, and the
+  back press does NOT also navigate away from the detail screen (confirms `BackHandler` correctly
+  intercepted it).
+
+- [ ] **Step 4: Verify unrelated UI is unreachable while fullscreen**
+
+While the barcode is fullscreen, confirm the bottom-right flip icon and the top app bar's back/
+Delete controls are not tappable underneath the overlay.
+
+- [ ] **Step 5: Verify the flip-to-back feature still works normally**
+
+Flip a pass to its back view and back again (unrelated to this feature, but touches the same file)
+to confirm no regression from the refactor.
+
+- [ ] **Step 6: Report back**
+
+Confirm with the user whether all of the above look correct before merging.
