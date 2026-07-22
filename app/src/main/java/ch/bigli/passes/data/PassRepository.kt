@@ -7,9 +7,9 @@ import ch.bigli.passes.domain.Barcode
 import ch.bigli.passes.domain.BarcodeFormat
 import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
-import ch.bigli.passes.domain.computeTitle
 import ch.bigli.passes.importing.PassImporter
 import ch.bigli.passes.importing.PdfImporter
 import ch.bigli.passes.importing.PkPassImporter
@@ -48,55 +48,37 @@ class PassRepository(
 
     /**
      * Applies live pkpass localization: re-reads the pass's raw zip (still on disk, unmodified)
-     * and translates field labels/values, organization, subtitle, and description against
-     * whatever language `Locale.getDefault()` currently returns — never baked in at import time,
-     * so a device language change takes effect on the next read without a re-import. Title is
-     * recomputed from the translated inputs too, unless the user has manually renamed the pass
-     * ([Pass.titleCustomized]). Non-pkpass passes, and any pass whose raw file can't be read,
-     * pass through unchanged.
+     * and translates field labels/values (including backFields), organization, subtitle, and
+     * description against whatever language `Locale.getDefault()` currently returns — never
+     * baked in at import time, so a device language change takes effect on the next read without
+     * a re-import. Non-pkpass passes, and any pass whose raw file can't be read, pass through
+     * unchanged.
      */
     private fun localize(pass: Pass): Pass {
         if (pass.sourceFormat != SourceFormat.PKPASS) return pass
         val bytes = runCatching { File(pass.rawFilePath).readBytes() }.getOrNull() ?: return pass
         val localization = runCatching { PkPassLocalization.forZip(bytes) }.getOrNull() ?: return pass
 
-        val translatedFields = pass.fields.map {
-            it.copy(
-                label = localization.translate(it.label) ?: it.label,
-                value = localization.translate(it.value) ?: it.value,
-            )
-        }
-        val translatedOrganization = localization.translate(pass.organization)
-        val translatedSubtitle = localization.translate(pass.subtitle)
-        val translatedDescription = localization.translate(pass.description)
-        val title = if (pass.titleCustomized) {
-            pass.title
-        } else {
-            computeTitle(translatedFields, translatedDescription, translatedOrganization)
-        }
+        fun translateField(f: PassField) = f.copy(
+            label = localization.translate(f.label) ?: f.label,
+            value = localization.translate(f.value) ?: f.value,
+        )
 
         return pass.copy(
-            fields = translatedFields,
-            organization = translatedOrganization,
-            subtitle = translatedSubtitle,
-            description = translatedDescription,
-            title = title,
+            fields = pass.fields.map(::translateField),
+            backFields = pass.backFields.map(::translateField),
+            organization = localization.translate(pass.organization),
+            subtitle = localization.translate(pass.subtitle),
+            description = localization.translate(pass.description),
         )
     }
 
-    /** Renames a pass. A blank/whitespace-only title is ignored so a pass can't be left untitled. */
-    suspend fun updateTitle(id: String, title: String) = withContext(Dispatchers.IO) {
-        val trimmed = title.trim()
-        if (trimmed.isNotEmpty()) dao.updateTitle(id, trimmed)
-    }
-
     /** Creates a pass from a manually-entered or scanned barcode (no source file). */
-    suspend fun createManualPass(title: String, format: BarcodeFormat, value: String): Pass =
+    suspend fun createManualPass(format: BarcodeFormat, value: String): Pass =
         withContext(Dispatchers.IO) {
             val pass = Pass(
                 id = UUID.randomUUID().toString(),
                 type = PassType.GENERIC,
-                title = title.trim(),
                 subtitle = null,
                 organization = null,
                 bgColor = null,
@@ -194,7 +176,7 @@ class PassRepository(
                 200 -> {
                     val bytes = conn.inputStream.use { it.readBytes() }
                     val fresh = try {
-                        pkPassImporter.import(bytes, pass.rawFilePath, pass.title)
+                        pkPassImporter.import(bytes, pass.rawFilePath, "")
                     } catch (e: Exception) {
                         return@withContext RefreshResult.Error("malformed update: ${e.message}")
                     }
@@ -206,12 +188,10 @@ class PassRepository(
                     tmp.renameTo(target)
                     val merged = fresh.copy(
                         id = pass.id,
-                        title = pass.title,
                         // Deliberately NOT forced to false: trust whatever the freshly re-imported
                         // pass.json says, so an issuer that still declares the pass voided stays voided.
                         voided = fresh.voided,
                         lastModified = conn.getHeaderField("Last-Modified") ?: pass.lastModified,
-                        titleCustomized = pass.titleCustomized,
                     )
                     dao.insert(merged.toEntity())
                     RefreshResult.Updated(merged)

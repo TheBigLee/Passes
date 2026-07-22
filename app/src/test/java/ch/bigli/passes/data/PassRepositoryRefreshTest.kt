@@ -72,9 +72,8 @@ class PassRepositoryRefreshTest {
 
     private val path = "/v1/passes/pass.test/SN1"
 
-    @Test fun `refreshPass on 200 replaces fields but preserves id and title, stores Last-Modified`() = runTest {
+    @Test fun `refreshPass on 200 replaces fields, stores Last-Modified`() = runTest {
         val imported = repo.import(buildPkPass(base), "test.pkpass")
-        repo.updateTitle(imported.id, "My Custom Title")
 
         server.respond(path) {
             TestHttpServer.Response(
@@ -86,12 +85,10 @@ class PassRepositoryRefreshTest {
         val result = repo.refreshPass(imported.id)
         check(result is RefreshResult.Updated)
         assertEquals(imported.id, result.pass.id)
-        assertEquals("My Custom Title", result.pass.title)
         assertEquals("Acme Updated", result.pass.organization)
         assertEquals("Wed, 21 Oct 2026 07:28:00 GMT", result.pass.lastModified)
 
         val stored = repo.getById(imported.id)!!
-        assertEquals("My Custom Title", stored.title)
         assertEquals("Acme Updated", stored.organization)
     }
 
@@ -150,7 +147,7 @@ class PassRepositoryRefreshTest {
     }
 
     @Test fun `refreshPass on a pass without updateInfo returns NotUpdatable without a network call`() = runTest {
-        val manual = repo.createManualPass("Coop card", BarcodeFormat.CODE128, "6001234567890")
+        val manual = repo.createManualPass(BarcodeFormat.CODE128, "6001234567890")
         val result = repo.refreshPass(manual.id)
         assertEquals(RefreshResult.NotUpdatable, result)
     }
