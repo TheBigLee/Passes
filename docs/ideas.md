@@ -48,23 +48,6 @@ Points to investigate when picked up:
   and can feed the reminder-notification idea above.
 - **Scope creep risk:** keep this a lightweight form, not a full pass-authoring tool.
 
-## Multilingual pkpass support
-
-Apple's pkpass format supports localization: a pass can bundle per-language `.lproj` folders
-(e.g. `en.lproj/`, `de.lproj/pass.strings`) with translated field labels/values and even
-localized images, selected by the device's locale. `PkPassImporter` currently only ever reads
-the top-level `pass.json` and top-level images, ignoring any `.lproj` folders entirely — so a
-multilingual pass always renders in whatever language its top-level fields happen to be in.
-
-Points to investigate when picked up:
-- **Detection:** scan the zip for `*.lproj/` entries during import.
-- **Selection:** match against the device's current locale (with a fallback chain, e.g.
-  `de-CH` → `de` → `Base`/top-level), similar to how Apple Wallet picks a language.
-- **What's localizable:** Apple's `.strings` files translate field label/value text; images
-  (`logo.png`, `strip.png`, etc.) can also have per-`.lproj` overrides.
-- **Scope:** decide whether to support live language switching in-app or just pick once at
-  import time based on the device locale at that moment.
-
 ## Support pkpass "back fields"
 
 Apple's pkpass format lets a pass declare `backFields` (in addition to header/primary/
