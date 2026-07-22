@@ -433,7 +433,7 @@ private fun PassFrontContent(
             Column(
                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Top,
             ) {
                 if (isBoarding) {
                     BoardingFieldsLayout(pass, fg)
