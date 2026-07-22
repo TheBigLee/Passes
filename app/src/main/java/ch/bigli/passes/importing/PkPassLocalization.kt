@@ -87,7 +87,12 @@ class PkPassLocalization private constructor(
                 val sb = StringBuilder()
                 while (i < n && text[i] != '"') {
                     if (text[i] == '\\' && i + 1 < n) {
-                        sb.append(text[i + 1])
+                        val escaped = when (text[i + 1]) {
+                            'n' -> '\n'
+                            't' -> '\t'
+                            else -> text[i + 1]
+                        }
+                        sb.append(escaped)
                         i += 2
                     } else {
                         sb.append(text[i])

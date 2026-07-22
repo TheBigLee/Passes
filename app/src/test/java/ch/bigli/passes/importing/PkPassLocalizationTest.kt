@@ -87,4 +87,11 @@ class PkPassLocalizationTest {
         val localization = PkPassLocalization.forZip(buildZip(emptyMap()), "de")
         assertNull(localization.imageEntryName("logo"))
     }
+
+    @Test fun `parses newline and tab escapes in strings values`() {
+        val strings = "\"Multiline\" = \"Line one\\nLine two\";"
+        val zip = buildZip(mapOf("de.lproj/pass.strings" to strings.toByteArray()))
+        val localization = PkPassLocalization.forZip(zip, "de")
+        assertEquals("Line one\nLine two", localization.translate("Multiline"))
+    }
 }
