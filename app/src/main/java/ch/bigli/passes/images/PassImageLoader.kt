@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.zip.ZipFile
 
 enum class PassImage(val baseName: String) { LOGO("logo"), STRIP("strip") }
@@ -22,7 +23,8 @@ class PassImageLoader {
     private val cache = LruCache<String, Bitmap>(16)
 
     suspend fun load(rawFilePath: String, image: PassImage): Bitmap? = withContext(Dispatchers.IO) {
-        val key = "$rawFilePath#${image.baseName}"
+        // Include the file's mtime so a refreshed pkpass (overwritten in place) invalidates the cache.
+        val key = "$rawFilePath#${image.baseName}#${File(rawFilePath).lastModified()}"
         cache.get(key)?.let { return@withContext it }
         val bitmap = runCatching {
             ZipFile(rawFilePath).use { zip ->

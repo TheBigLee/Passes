@@ -98,10 +98,12 @@ fun PassDetailScreen(
     val fg = if (bgColor != null) Color(legibleTextColor(bgColor, p?.fgColor)) else Color.White
 
     val rawPath = p?.rawFilePath
-    val logo by produceState<Bitmap?>(initialValue = null, rawPath) {
+    // Keyed on lastModified too, so a successful refresh (which overwrites the pkpass file
+    // in place) causes the logo/strip images to reload instead of showing stale artwork.
+    val logo by produceState<Bitmap?>(initialValue = null, rawPath, p?.lastModified) {
         value = rawPath?.let { imageLoader.load(it, PassImage.LOGO) }
     }
-    val strip by produceState<Bitmap?>(initialValue = null, rawPath) {
+    val strip by produceState<Bitmap?>(initialValue = null, rawPath, p?.lastModified) {
         value = rawPath?.let { imageLoader.load(it, PassImage.STRIP) }
     }
 
@@ -146,7 +148,7 @@ fun PassDetailScreen(
             onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            val isVoidedOrExpired = p.voided || p.expirationDate?.isBefore(java.time.Instant.now()) == true
+            val isVoidedOrExpired = p.isVoidedOrExpired()
             Column(Modifier.fillMaxSize()) {
                 strip?.let {
                     Image(
@@ -159,6 +161,7 @@ fun PassDetailScreen(
                 Column(
                     Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Text(p.title, color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.size(12.dp))

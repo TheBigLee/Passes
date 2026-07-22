@@ -158,7 +158,12 @@ class PassRepository(
                     } catch (e: Exception) {
                         return@withContext RefreshResult.Error("malformed update: ${e.message}")
                     }
-                    File(pass.rawFilePath).writeBytes(bytes)
+                    // Write to a temp file then rename, so a concurrent image read via
+                    // ZipFile(rawFilePath) never sees a partially-written zip.
+                    val target = File(pass.rawFilePath)
+                    val tmp = File(target.parentFile, "${target.name}.tmp")
+                    tmp.writeBytes(bytes)
+                    tmp.renameTo(target)
                     val merged = fresh.copy(
                         id = pass.id,
                         title = pass.title,

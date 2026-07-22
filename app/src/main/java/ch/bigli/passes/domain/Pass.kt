@@ -34,4 +34,7 @@ data class Pass(
     val updateInfo: UpdateInfo?,
     val voided: Boolean = false,
     val lastModified: String? = null,
-)
+) {
+    /** True if the issuer declared this pass voided, or its static [expirationDate] has passed. */
+    fun isVoidedOrExpired(): Boolean = voided || expirationDate?.isBefore(Instant.now()) == true
+}
