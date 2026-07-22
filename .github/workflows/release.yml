@@ -84,9 +84,13 @@ jobs:
           # Not fatal if this fails or finds nothing (e.g. the very first release ever) - the
           # changelog step below tolerates an empty fromTag the same way it already tolerates
           # its own failure.
+          # Uses jq's built-in `env` object (not --arg) to reference $CURRENT_TAG safely: gh's
+          # --jq flag takes a single filter-expression argument and doesn't understand jq's own
+          # --arg flag passed alongside it (a prior attempt at this used --arg and gh rejected it
+          # with "unknown command", which silently produced an empty PREV and reproduced the
+          # exact bug this step exists to fix).
           PREV=$(gh release list --limit 50 --json tagName,createdAt \
-            --jq --arg current "$CURRENT_TAG" \
-            '[.[] | select(.tagName != $current)] | sort_by(.createdAt) | last | .tagName // empty')
+            --jq '[.[] | select(.tagName != env.CURRENT_TAG)] | sort_by(.createdAt) | last | .tagName // empty')
           echo "tag=$PREV" >> "$GITHUB_OUTPUT"
 
       - name: Build changelog
