@@ -417,6 +417,7 @@ private fun PassFrontContent(
         modifier = Modifier.fillMaxSize(),
     ) {
         val isVoidedOrExpired = pass.isVoidedOrExpired()
+        val isBoarding = pass.type == PassType.BOARDING
         Column(Modifier.fillMaxSize().background(bg)) {
             strip?.let {
                 Image(
@@ -426,7 +427,7 @@ private fun PassFrontContent(
                     contentScale = ContentScale.FillWidth,
                 )
             }
-            if (pass.type == PassType.BOARDING) {
+            if (isBoarding) {
                 BoardingHeaderRow(pass, fg)
             }
             Column(
@@ -434,7 +435,7 @@ private fun PassFrontContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                if (pass.type == PassType.BOARDING) {
+                if (isBoarding) {
                     BoardingFieldsLayout(pass, fg)
                 } else {
                     GenericFieldsLayout(pass, fg)
