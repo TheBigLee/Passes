@@ -36,12 +36,17 @@ class BarcodeRenderer {
         val cropBottom = (contentTop + contentHeight + quietZone).coerceAtMost(matrix.height)
         val w = cropRight - cropLeft
         val h = cropBottom - cropTop
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
-        for (x in 0 until w) {
-            for (y in 0 until h) {
-                bmp.setPixel(x, y, if (matrix[cropLeft + x, cropTop + y]) Color.BLACK else Color.WHITE)
+        // One bulk setPixels call rather than one setPixel call per pixel - matters here since
+        // fullscreen rendering requests up to 1200x1200/1600x600, i.e. up to ~1.44M pixels.
+        val pixels = IntArray(w * h)
+        for (y in 0 until h) {
+            val rowStart = y * w
+            for (x in 0 until w) {
+                pixels[rowStart + x] = if (matrix[cropLeft + x, cropTop + y]) Color.BLACK else Color.WHITE
             }
         }
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
         return bmp
     }
 }

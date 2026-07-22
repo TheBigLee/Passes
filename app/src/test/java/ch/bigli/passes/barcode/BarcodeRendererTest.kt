@@ -38,4 +38,33 @@ class BarcodeRendererTest {
         assertTrue(bmp.width > 0)
         assertTrue(bmp.height > 0)
     }
+
+    // Regression: ZXing's own quiet-zone padding around the encoded content isn't always
+    // symmetric (depends on how evenly the requested size divides into whole modules), which
+    // was invisible against a white background but made the pattern look off-center once
+    // displayed fullscreen. Verifies the actual black content - not just the bitmap's own
+    // dimensions - sits centered within the returned bitmap.
+    @Test fun `qr content is centered within the trimmed bitmap, not just its own quiet zone`() {
+        val bmp = renderer.render(Barcode(BarcodeFormat.QR, "HELLO", null), 300, 300)
+        var minX = bmp.width
+        var maxX = -1
+        var minY = bmp.height
+        var maxY = -1
+        for (x in 0 until bmp.width) {
+            for (y in 0 until bmp.height) {
+                if (bmp.getPixel(x, y) == android.graphics.Color.BLACK) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        val leftMargin = minX
+        val rightMargin = bmp.width - 1 - maxX
+        val topMargin = minY
+        val bottomMargin = bmp.height - 1 - maxY
+        assertTrue("left=$leftMargin right=$rightMargin", kotlin.math.abs(leftMargin - rightMargin) <= 3)
+        assertTrue("top=$topMargin bottom=$bottomMargin", kotlin.math.abs(topMargin - bottomMargin) <= 3)
+    }
 }

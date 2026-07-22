@@ -49,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -175,6 +176,9 @@ fun PassDetailScreen(
         animationSpec = tween(300),
         label = "barcodeFullscreen",
     )
+    // Reading barcodeProgress directly for barcodeHidden would recompose PassFrontContent on
+    // every animation frame; derivedStateOf only invalidates when the boolean actually flips.
+    val barcodeHidden by remember { derivedStateOf { barcodeProgress > 0f } }
     BackHandler(enabled = fullscreenBarcode) { fullscreenBarcode = false }
 
     Box(
@@ -235,7 +239,7 @@ fun PassDetailScreen(
                             isRefreshing = isRefreshing,
                             onRefresh = { viewModel.refresh() },
                             barcodeBitmap = barcodeBitmap,
-                            barcodeHidden = barcodeProgress > 0f,
+                            barcodeHidden = barcodeHidden,
                             onBarcodeTap = {
                                 barcodeSourceBounds = latestBarcodeBounds.value
                                 fullscreenBarcode = true
@@ -359,10 +363,13 @@ private fun FullscreenBarcodeOverlay(
         Canvas(
             Modifier
                 .fillMaxSize()
-                .semantics { contentDescription = "Barcode" },
+                // altText is included here (not just drawn as pixels) so screen-reader users get
+                // the same caption sighted users see - Canvas has no per-drawing-call semantics.
+                .semantics { contentDescription = if (altText != null) "Barcode, $altText" else "Barcode" },
         ) {
             val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
             val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            val captionGap = 16.dp.toPx()
             val textLayout = altText?.let {
                 textMeasurer.measure(
                     text = it,
@@ -376,7 +383,7 @@ private fun FullscreenBarcodeOverlay(
             fun drawBarcodeAndCaption() {
                 drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
                 if (textLayout != null) {
-                    drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + 16f))
+                    drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + captionGap))
                 }
             }
             if (rotation == 0f) {
