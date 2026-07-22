@@ -9,9 +9,11 @@ import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
+import ch.bigli.passes.domain.computeTitle
 import ch.bigli.passes.importing.PassImporter
 import ch.bigli.passes.importing.PdfImporter
 import ch.bigli.passes.importing.PkPassImporter
+import ch.bigli.passes.importing.PkPassLocalization
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -35,13 +37,51 @@ class PassRepository(
     private val pkPassImporter: PkPassImporter = PkPassImporter(),
     private val pdfImporter: PdfImporter = PdfImporter(),
 ) {
-    fun observeAll(): Flow<List<Pass>> = dao.observeAll().map { list -> list.map { it.toDomain() } }
+    fun observeAll(): Flow<List<Pass>> = dao.observeAll().map { list -> list.map { localize(it.toDomain()) } }
 
-    suspend fun getById(id: String): Pass? = withContext(Dispatchers.IO) { dao.getById(id)?.toDomain() }
+    suspend fun getById(id: String): Pass? = withContext(Dispatchers.IO) { dao.getById(id)?.toDomain()?.let { localize(it) } }
 
     suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         dao.getById(id)?.let { runCatching { File(it.rawFilePath).delete() } }
         dao.deleteById(id)
+    }
+
+    /**
+     * Applies live pkpass localization: re-reads the pass's raw zip (still on disk, unmodified)
+     * and translates field labels/values, organization, subtitle, and description against
+     * whatever language `Locale.getDefault()` currently returns — never baked in at import time,
+     * so a device language change takes effect on the next read without a re-import. Title is
+     * recomputed from the translated inputs too, unless the user has manually renamed the pass
+     * ([Pass.titleCustomized]). Non-pkpass passes, and any pass whose raw file can't be read,
+     * pass through unchanged.
+     */
+    private fun localize(pass: Pass): Pass {
+        if (pass.sourceFormat != SourceFormat.PKPASS) return pass
+        val bytes = runCatching { File(pass.rawFilePath).readBytes() }.getOrNull() ?: return pass
+        val localization = runCatching { PkPassLocalization.forZip(bytes) }.getOrNull() ?: return pass
+
+        val translatedFields = pass.fields.map {
+            it.copy(
+                label = localization.translate(it.label) ?: it.label,
+                value = localization.translate(it.value) ?: it.value,
+            )
+        }
+        val translatedOrganization = localization.translate(pass.organization)
+        val translatedSubtitle = localization.translate(pass.subtitle)
+        val translatedDescription = localization.translate(pass.description)
+        val title = if (pass.titleCustomized) {
+            pass.title
+        } else {
+            computeTitle(translatedFields, translatedDescription, translatedOrganization)
+        }
+
+        return pass.copy(
+            fields = translatedFields,
+            organization = translatedOrganization,
+            subtitle = translatedSubtitle,
+            description = translatedDescription,
+            title = title,
+        )
     }
 
     /** Renames a pass. A blank/whitespace-only title is ignored so a pass can't be left untitled. */
@@ -171,6 +211,7 @@ class PassRepository(
                         // pass.json says, so an issuer that still declares the pass voided stays voided.
                         voided = fresh.voided,
                         lastModified = conn.getHeaderField("Last-Modified") ?: pass.lastModified,
+                        titleCustomized = pass.titleCustomized,
                     )
                     dao.insert(merged.toEntity())
                     RefreshResult.Updated(merged)
