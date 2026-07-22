@@ -33,10 +33,9 @@ import ch.bigli.passes.domain.BarcodeFormat
 @Composable
 fun CreatePassScreen(
     prefill: Barcode?,
-    onCreate: (title: String, format: BarcodeFormat, value: String) -> Unit,
+    onCreate: (format: BarcodeFormat, value: String) -> Unit,
     onBack: () -> Unit,
 ) {
-    var title by rememberSaveable { mutableStateOf("") }
     var value by rememberSaveable { mutableStateOf(prefill?.message ?: "") }
     var format by remember { mutableStateOf(prefill?.format ?: BarcodeFormat.QR) }
     var expanded by remember { mutableStateOf(false) }
@@ -57,13 +56,6 @@ fun CreatePassScreen(
             Modifier.padding(padding).padding(16.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Title") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
@@ -90,8 +82,8 @@ fun CreatePassScreen(
                 }
             }
             Button(
-                onClick = { onCreate(title, format, value) },
-                enabled = title.isNotBlank() && value.isNotBlank(),
+                onClick = { onCreate(format, value) },
+                enabled = value.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Create pass") }
         }

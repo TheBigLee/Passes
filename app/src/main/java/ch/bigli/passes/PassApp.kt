@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import ch.bigli.passes.data.MIGRATION_1_2
 import ch.bigli.passes.data.MIGRATION_2_3
 import ch.bigli.passes.data.MIGRATION_3_4
+import ch.bigli.passes.data.MIGRATION_4_5
 import ch.bigli.passes.data.PassDatabase
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.images.PassImageLoader
@@ -30,7 +31,7 @@ class PassApp : Application(), Configuration.Provider {
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
 
-    /** Set after an import so the NavHost navigates to the new pass; carries whether to open the title editor. */
+    /** Set after an import so the NavHost navigates to the new pass. */
     val pendingPass = MutableStateFlow<PendingPass?>(null)
 
     /** A scanned barcode handed from ScanScreen to CreatePassScreen as a prefill; consumed once. */
@@ -42,7 +43,7 @@ class PassApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         val db = Room.databaseBuilder(this, PassDatabase::class.java, "passes.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
         repository = PassRepository(this, db.passDao(), PkPassImporter())
 
@@ -55,5 +56,5 @@ class PassApp : Application(), Configuration.Provider {
     }
 }
 
-/** A just-imported pass to navigate to. [editTitle] auto-opens the rename dialog (used for PDF imports). */
-data class PendingPass(val id: String, val editTitle: Boolean)
+/** A just-imported pass to navigate to. */
+data class PendingPass(val id: String)

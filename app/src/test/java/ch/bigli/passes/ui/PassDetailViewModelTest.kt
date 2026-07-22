@@ -36,19 +36,10 @@ class PassDetailViewModelTest {
 
     @After fun tearDown() { db.close(); Dispatchers.resetMain() }
 
-    @Test fun `updateTitle updates the on-screen pass`() = runTest {
+    @Test fun `loads the pass by id on init`() = runTest {
         val imported = repo.import(fixture("sample.pkpass"), "sample.pkpass")
         val vm = PassDetailViewModel(repo, imported.id)
-        vm.pass.first { it != null }
-        vm.updateTitle("Renamed")
-        assertEquals("Renamed", vm.pass.first { it?.title == "Renamed" }?.title)
-    }
-
-    @Test fun `updateTitle ignores blank input`() = runTest {
-        val imported = repo.import(fixture("sample.pkpass"), "sample.pkpass")
-        val vm = PassDetailViewModel(repo, imported.id)
-        val loaded = vm.pass.first { it != null }!!
-        vm.updateTitle("   ")
-        assertEquals(loaded.title, vm.pass.first { it != null }?.title)
+        val loaded = vm.pass.first { it != null }
+        assertEquals(imported.id, loaded?.id)
     }
 }

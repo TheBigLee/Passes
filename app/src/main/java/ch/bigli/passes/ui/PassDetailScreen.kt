@@ -3,9 +3,12 @@ package ch.bigli.passes.ui
 import android.app.Activity
 import android.graphics.Bitmap
 import android.view.WindowManager
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,22 +18,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -49,6 +52,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
 import ch.bigli.passes.domain.BarcodeFormat
 import ch.bigli.passes.domain.FieldPosition
+import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
 
@@ -67,11 +72,10 @@ fun PassDetailScreen(
     viewModel: PassDetailViewModel,
     imageLoader: PassImageLoader,
     onBack: () -> Unit,
-    openTitleEditor: Boolean = false,
 ) {
     val pass by viewModel.pass.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showEditDialog by rememberSaveable { mutableStateOf(openTitleEditor) }
+    var flipped by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
@@ -107,6 +111,8 @@ fun PassDetailScreen(
         value = rawPath?.let { imageLoader.load(it, PassImage.STRIP) }
     }
 
+    val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f, animationSpec = tween(600), label = "cardFlip")
+
     Scaffold(
         containerColor = bg,
         topBar = {
@@ -129,132 +135,160 @@ fun PassDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = fg)
                     }
                 },
-                actions = {
-                    IconButton(onClick = { showEditDialog = true }) {
-                        Icon(Icons.Filled.Edit, contentDescription = "Edit title", tint = fg)
-                    }
-                    IconButton(onClick = { viewModel.delete(onBack) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = fg)
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = bg, titleContentColor = fg),
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         if (p == null) return@Scaffold
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.fillMaxSize().padding(padding),
-        ) {
-            val isVoidedOrExpired = p.isVoidedOrExpired()
-            Column(Modifier.fillMaxSize()) {
-                strip?.let {
-                    Image(
-                        it.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentScale = ContentScale.FillWidth,
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        rotationY = rotation
+                        cameraDistance = 8 * density
+                    },
+            ) {
+                if (rotation <= 90f) {
+                    PassFrontContent(
+                        pass = p,
+                        bg = bg,
+                        fg = fg,
+                        strip = strip,
+                        isRefreshing = isRefreshing,
+                        onRefresh = { viewModel.refresh() },
                     )
-                }
-                Column(
-                    Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(p.title, color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.size(12.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        p.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
-                                Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            }
-                        }
+                } else {
+                    Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
+                        PassBackContent(pass = p, bg = bg, fg = fg, onDelete = { viewModel.delete(onBack) })
                     }
-                    Spacer(Modifier.size(32.dp))
-                    p.barcode?.let { bc ->
-                        val renderer = remember { BarcodeRenderer() }
-                        val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
-                        val bmp = remember(bc) {
-                            if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
-                        }
-                        Column(
-                            Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .padding(16.dp)
-                                .alpha(if (isVoidedOrExpired) 0.35f else 1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
-                            if (p.voided) {
-                                Text(
-                                    "This pass has been voided by the issuer",
-                                    color = Color.Black,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(top = 8.dp),
-                                )
-                            } else if (p.expirationDate?.isBefore(java.time.Instant.now()) == true) {
-                                Text(
-                                    "This pass has expired",
-                                    color = Color.Black,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(top = 8.dp),
-                                )
-                            }
-                            bc.altText?.let {
-                                Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                            }
-                        }
-                        Text(
-                            "☀ Screen brightened for scanning",
-                            color = fg.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 10.dp),
-                        )
-                    } ?: Text("No barcode on this pass", color = fg)
                 }
+            }
+            IconButton(
+                onClick = { flipped = !flipped },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.25f)),
+            ) {
+                Icon(Icons.Filled.Info, contentDescription = if (flipped) "Show front of pass" else "Show back of pass", tint = fg)
             }
         }
     }
+}
 
-    if (showEditDialog && p != null) {
-        TitleEditDialog(
-            initialTitle = p.title,
-            onSave = { newTitle ->
-                viewModel.updateTitle(newTitle)
-                showEditDialog = false
-            },
-            onDismiss = { showEditDialog = false },
-        )
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PassFrontContent(
+    pass: Pass,
+    bg: Color,
+    fg: Color,
+    strip: Bitmap?,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        val isVoidedOrExpired = pass.isVoidedOrExpired()
+        Column(Modifier.fillMaxSize().background(bg)) {
+            strip?.let {
+                Image(
+                    it.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth,
+                )
+            }
+            Column(
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    pass.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
+                            Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+                Spacer(Modifier.size(32.dp))
+                pass.barcode?.let { bc ->
+                    val renderer = remember { BarcodeRenderer() }
+                    val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
+                    val bmp = remember(bc) {
+                        if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
+                    }
+                    Column(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White)
+                            .padding(16.dp)
+                            .alpha(if (isVoidedOrExpired) 0.35f else 1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
+                        if (pass.voided) {
+                            Text(
+                                "This pass has been voided by the issuer",
+                                color = Color.Black,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        } else if (pass.expirationDate?.isBefore(java.time.Instant.now()) == true) {
+                            Text(
+                                "This pass has expired",
+                                color = Color.Black,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                        bc.altText?.let {
+                            Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                    Text(
+                        "☀ Screen brightened for scanning",
+                        color = fg.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                } ?: Text("No barcode on this pass", color = fg)
+            }
+        }
     }
 }
 
 @Composable
-private fun TitleEditDialog(
-    initialTitle: String,
-    onSave: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var text by rememberSaveable { mutableStateOf(initialTitle) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit title") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                label = { Text("Title") },
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text) }, enabled = text.isNotBlank()) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
+private fun PassBackContent(pass: Pass, bg: Color, fg: Color, onDelete: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(bg)
+            .verticalScroll(rememberScrollState())
+            // Extra bottom padding keeps the Delete button clear of the flip icon's touch
+            // target, which floats on top of this content in the bottom-right corner.
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
+    ) {
+        pass.backFields.forEach { f ->
+            Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 11.sp)
+            Text(f.value, color = fg, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp))
+        }
+        Spacer(Modifier.size(24.dp))
+        Button(
+            onClick = onDelete,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.25f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Filled.Delete, contentDescription = null, tint = fg)
+            Spacer(Modifier.size(8.dp))
+            Text("Delete pass", color = fg)
+        }
+    }
 }
