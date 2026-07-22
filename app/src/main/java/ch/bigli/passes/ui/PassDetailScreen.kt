@@ -300,10 +300,16 @@ private fun PassBackContent(pass: Pass, bg: Color, fg: Color) {
     }
 }
 
-/** True only if [value], trimmed, is nothing but a bare URL or email address — not free text that merely contains one. */
-private fun isBareUrlOrEmail(value: String): Boolean {
+/**
+ * True only if [value], trimmed, is nothing but a bare URL or email address — not free text that
+ * merely contains one. Backing pkpass content is issuer-supplied and untrusted, and
+ * [Patterns.WEB_URL] is a known ANR risk on adversarial input via catastrophic backtracking; a
+ * real bare URL/email is never anywhere near this long, so anything longer is rejected before it
+ * ever reaches the regex engine.
+ */
+internal fun isBareUrlOrEmail(value: String): Boolean {
     val trimmed = value.trim()
-    if (trimmed.isEmpty() || trimmed.contains(' ') || trimmed.contains('\n')) return false
+    if (trimmed.isEmpty() || trimmed.length > 512 || trimmed.contains(' ') || trimmed.contains('\n')) return false
     return Patterns.WEB_URL.matcher(trimmed).matches() || Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()
 }
 
