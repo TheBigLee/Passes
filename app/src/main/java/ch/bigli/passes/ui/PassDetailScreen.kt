@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -174,7 +176,7 @@ fun PassDetailScreen(
                     )
                 }
                 Column(
-                    Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                    Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(p.title, color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -187,7 +189,7 @@ fun PassDetailScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.size(32.dp))
                     p.barcode?.let { bc ->
                         val renderer = remember { BarcodeRenderer() }
                         val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
@@ -210,7 +212,6 @@ fun PassDetailScreen(
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     } ?: Text("No barcode on this pass", color = fg)
-                    Spacer(Modifier.weight(1f))
                 }
             }
         }
