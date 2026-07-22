@@ -8,7 +8,8 @@ Native Android pass wallet. Store, view, and auto-update passes — no Google/Ap
 - **Import PDF tickets** — extracts a barcode/QR from a PDF page.
 - **Manual entry** — type in or scan a barcode/QR directly.
 - **Auto-update** — passes with a `webServiceURL` poll for changes every 6h (WorkManager) and support pull-to-refresh on the detail screen. Handles voided passes (410) and static `voided`/`expirationDate` fields.
-- **Editable title**, delete, brightness-boost while showing a barcode for scanning.
+- **Flip-to-back detail view** — a persistent info icon flips the pass to reveal pkpass `backFields` (with HTML/link rendering) and Delete.
+- **Brightness-boost** while showing a barcode for scanning.
 
 ## Project layout
 
