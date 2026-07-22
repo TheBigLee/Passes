@@ -111,7 +111,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
         if (primary.size == 2) {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BoardingPrimaryField(primary[0], fg)
@@ -119,7 +119,10 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
                     Icons.Filled.Flight,
                     contentDescription = null,
                     tint = fg,
-                    modifier = Modifier.size(28.dp).graphicsLayer(rotationZ = 90f),
+                    modifier = Modifier
+                        .padding(top = 24.dp)
+                        .size(52.dp)
+                        .graphicsLayer(rotationZ = 90f),
                 )
                 BoardingPrimaryField(primary[1], fg)
             }
