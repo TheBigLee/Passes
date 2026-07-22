@@ -158,14 +158,15 @@ private fun PassCard(pass: Pass, imageLoader: PassImageLoader, onClick: () -> Un
         } else if (pass.expirationDate?.isBefore(java.time.Instant.now()) == true) {
             Text("EXPIRED", color = fg.copy(alpha = 0.9f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
-        val primaryValue = pass.fields.firstOrNull { it.position == FieldPosition.PRIMARY }?.value
+        val primaryValue = pass.fields.firstOrNull { it.position == FieldPosition.PRIMARY }?.value?.takeIf { it.isNotEmpty() }
         primaryValue?.let {
             Text(it, color = fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 8.dp))
         }
         val summary = pass.fields.filter { it.position != FieldPosition.PRIMARY }
             .take(3).joinToString("   ") { "${it.label}: ${it.value}" }
         if (summary.isNotEmpty()) {
-            Text(summary, color = fg.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            val summaryTopPadding = if (primaryValue != null) 4.dp else 8.dp
+            Text(summary, color = fg.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = summaryTopPadding))
         }
     }
 }
