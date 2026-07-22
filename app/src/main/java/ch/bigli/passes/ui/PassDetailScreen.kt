@@ -2,7 +2,12 @@ package ch.bigli.passes.ui
 
 import android.app.Activity
 import android.graphics.Bitmap
+import android.text.Html
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
+import android.util.Patterns
 import android.view.WindowManager
+import android.widget.TextView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -23,17 +28,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -53,11 +57,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
 import ch.bigli.passes.domain.BarcodeFormat
@@ -135,6 +142,13 @@ fun PassDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = fg)
                     }
                 },
+                actions = {
+                    if (flipped) {
+                        TextButton(onClick = { viewModel.delete(onBack) }) {
+                            Text("Delete", color = fg)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = bg, titleContentColor = fg),
             )
         },
@@ -161,7 +175,7 @@ fun PassDetailScreen(
                     )
                 } else {
                     Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
-                        PassBackContent(pass = p, bg = bg, fg = fg, onDelete = { viewModel.delete(onBack) })
+                        PassBackContent(pass = p, bg = bg, fg = fg)
                     }
                 }
             }
@@ -266,29 +280,62 @@ private fun PassFrontContent(
 }
 
 @Composable
-private fun PassBackContent(pass: Pass, bg: Color, fg: Color, onDelete: () -> Unit) {
+private fun PassBackContent(pass: Pass, bg: Color, fg: Color) {
     Column(
         Modifier
             .fillMaxSize()
             .background(bg)
             .verticalScroll(rememberScrollState())
-            // Extra bottom padding keeps the Delete button clear of the flip icon's touch
-            // target, which floats on top of this content in the bottom-right corner.
+            // Extra bottom padding keeps content clear of the flip icon's touch target, which
+            // floats on top of this content in the bottom-right corner.
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
     ) {
-        pass.backFields.forEach { f ->
+        pass.backFields.forEachIndexed { index, f ->
+            if (index > 0) {
+                HorizontalDivider(color = fg.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
+            }
             Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 11.sp)
-            Text(f.value, color = fg, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp))
-        }
-        Spacer(Modifier.size(24.dp))
-        Button(
-            onClick = onDelete,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.25f)),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Filled.Delete, contentDescription = null, tint = fg)
-            Spacer(Modifier.size(8.dp))
-            Text("Delete pass", color = fg)
+            HtmlText(html = f.value, color = fg, fontSize = 14.sp)
         }
     }
+}
+
+/** True only if [value], trimmed, is nothing but a bare URL or email address — not free text that merely contains one. */
+private fun isBareUrlOrEmail(value: String): Boolean {
+    val trimmed = value.trim()
+    if (trimmed.isEmpty() || trimmed.contains(' ') || trimmed.contains('\n')) return false
+    return Patterns.WEB_URL.matcher(trimmed).matches() || Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()
+}
+
+/**
+ * pkpass backFields values may contain HTML markup (not officially part of the PassKit spec, but
+ * some real-world issuers embed it) — rendered via a plain [TextView] since Compose has no
+ * built-in HTML support. The source is typically plain text with a few `<a>` tags sprinkled in
+ * rather than well-formed HTML, so literal newlines are converted to `<br>` first — otherwise
+ * [Html.fromHtml] collapses them the way a browser would collapse whitespace in real markup.
+ * A value that's *only* a bare URL/email (no surrounding free text) is auto-linkified instead,
+ * since those never carry an `<a>` tag of their own.
+ */
+@Composable
+private fun HtmlText(html: String, color: Color, fontSize: TextUnit, modifier: Modifier = Modifier) {
+    val colorArgb = color.toArgb()
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            TextView(ctx).apply { movementMethod = LinkMovementMethod.getInstance() }
+        },
+        update = { tv ->
+            val trimmed = html.trim()
+            if (isBareUrlOrEmail(trimmed)) {
+                tv.text = trimmed
+                Linkify.addLinks(tv, Linkify.WEB_URLS or Linkify.EMAIL_ADDRESSES)
+            } else {
+                val withLineBreaks = html.replace(Regex("\r\n|\r|\n"), "<br>")
+                tv.text = Html.fromHtml(withLineBreaks, Html.FROM_HTML_MODE_LEGACY)
+            }
+            tv.setTextColor(colorArgb)
+            tv.setLinkTextColor(colorArgb)
+            tv.textSize = fontSize.value
+        },
+    )
 }
