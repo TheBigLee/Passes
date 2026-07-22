@@ -80,7 +80,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
@@ -94,8 +93,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
 import ch.bigli.passes.domain.BarcodeFormat
-import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
 import kotlin.math.roundToInt
@@ -427,18 +426,18 @@ private fun PassFrontContent(
                     contentScale = ContentScale.FillWidth,
                 )
             }
+            if (pass.type == PassType.BOARDING) {
+                BoardingHeaderRow(pass, fg)
+            }
             Column(
                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    pass.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
+                if (pass.type == PassType.BOARDING) {
+                    BoardingFieldsLayout(pass, fg)
+                } else {
+                    GenericFieldsLayout(pass, fg)
                 }
                 Spacer(Modifier.size(32.dp))
                 pass.barcode?.let { bc ->
