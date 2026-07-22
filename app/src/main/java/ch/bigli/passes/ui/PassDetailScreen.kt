@@ -282,6 +282,7 @@ fun PassDetailScreen(
                 progress = barcodeProgress,
                 rotateToLandscape = !isSquareBarcode,
                 altText = captionText,
+                dimmed = p?.isVoidedOrExpired() == true,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -308,6 +309,7 @@ private fun FullscreenBarcodeOverlay(
     progress: Float,
     rotateToLandscape: Boolean,
     altText: String?,
+    dimmed: Boolean,
     onDismiss: () -> Unit,
 ) {
     // targetBounds is the raw Compose window size, which on an edge-to-edge window includes the
@@ -375,10 +377,14 @@ private fun FullscreenBarcodeOverlay(
             val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
             val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
             val captionGap = 16.dp.toPx()
+            // Matches the inline barcode's own dimming (PassFrontContent applies the same
+            // 0.35f alpha to its white card) so a voided/expired pass looks consistently
+            // greyed-out whether inline or fullscreen.
+            val contentAlpha = if (dimmed) 0.35f else 1f
             val textLayout = altText?.let {
                 textMeasurer.measure(
                     text = it,
-                    style = TextStyle(color = Color.Black, fontSize = 12.sp, textAlign = TextAlign.Center),
+                    style = TextStyle(color = Color.Black.copy(alpha = contentAlpha), fontSize = 12.sp, textAlign = TextAlign.Center),
                     // fixedWidth, not maxWidth alone: a min of 0 would let the layout shrink to
                     // the text's own natural (short) width, leaving textAlign=Center nothing to
                     // center within - it needs to actually BE the full barcode width.
@@ -386,7 +392,7 @@ private fun FullscreenBarcodeOverlay(
                 )
             }
             fun drawBarcodeAndCaption() {
-                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize, alpha = contentAlpha)
                 if (textLayout != null) {
                     drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + captionGap))
                 }
