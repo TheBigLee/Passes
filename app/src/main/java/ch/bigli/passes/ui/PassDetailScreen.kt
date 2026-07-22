@@ -11,6 +11,7 @@ import android.widget.TextView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,12 +21,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,9 +62,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -70,7 +74,12 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +92,7 @@ import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
+import kotlin.math.roundToInt
 
 /** A plain (non-Compose-state) mutable box, so writing to [value] doesn't trigger recomposition. */
 private class BoundsHolder {
@@ -139,11 +149,11 @@ fun PassDetailScreen(
     // Fullscreen barcode: rendered once here (not inside PassFrontContent) so the exact same
     // Bitmap backs both the small inline display and the large fullscreen overlay below - no
     // re-render step, no quality loss when it grows.
+    val isSquareBarcode = p?.barcode?.format == BarcodeFormat.QR || p?.barcode?.format == BarcodeFormat.AZTEC
     val barcodeRenderer = remember { BarcodeRenderer() }
     val barcodeBitmap = remember(p?.barcode) {
         p?.barcode?.let { bc ->
-            val square = bc.format == BarcodeFormat.QR || bc.format == BarcodeFormat.AZTEC
-            if (square) barcodeRenderer.render(bc, 1200, 1200) else barcodeRenderer.render(bc, 1600, 600)
+            if (isSquareBarcode) barcodeRenderer.render(bc, 1200, 1200) else barcodeRenderer.render(bc, 1600, 600)
         }
     }
     var fullscreenBarcode by remember { mutableStateOf(false) }
@@ -256,6 +266,7 @@ fun PassDetailScreen(
                 sourceBounds = source,
                 targetBounds = target,
                 progress = barcodeProgress,
+                rotateToLandscape = !isSquareBarcode,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -264,9 +275,15 @@ fun PassDetailScreen(
 
 /**
  * Renders [bitmap] positioned/sized by interpolating between [sourceBounds] (the inline barcode's
- * captured on-screen position) and [targetBounds] (the whole screen), driven by [progress]
- * (0f = collapsed at sourceBounds, 1f = fullscreen). Lives outside the Scaffold's content padding
- * so it can visually grow over the TopAppBar too - genuinely fullscreen, not just the content area.
+ * captured on-screen position) and a fullscreen target, driven by [progress] (0f = collapsed at
+ * sourceBounds, 1f = fullscreen). Lives outside the Scaffold's content padding so it can visually
+ * grow over the TopAppBar too - genuinely fullscreen, not just the content area.
+ *
+ * When [rotateToLandscape] is true (non-square formats - PDF417/Code128), the target box is
+ * centered and sized to the bitmap's own aspect ratio, scaled so that its footprint *after* a 90°
+ * rotation fits the screen - a wide, short barcode's long axis then runs along the screen's much
+ * longer height, letting it render far bigger than fitting it unrotated ever could. Square formats
+ * (QR/Aztec) gain nothing from this, so they always target the plain full-screen rect, unrotated.
  */
 @Composable
 private fun FullscreenBarcodeOverlay(
@@ -274,11 +291,45 @@ private fun FullscreenBarcodeOverlay(
     sourceBounds: Rect,
     targetBounds: Rect,
     progress: Float,
+    rotateToLandscape: Boolean,
     onDismiss: () -> Unit,
 ) {
-    val topLeft = lerp(sourceBounds.topLeft, targetBounds.topLeft, progress)
-    val size = lerp(sourceBounds.size, targetBounds.size, progress)
+    // targetBounds is the raw Compose window size, which on an edge-to-edge window includes the
+    // area the status/navigation bars visually draw over. Shrinking it to the actual system-bars
+    // safe area keeps the (possibly rotated) barcode from appearing to run off-screen under them.
     val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val systemBars = WindowInsets.systemBars
+    val safeBounds = Rect(
+        left = targetBounds.left + systemBars.getLeft(density, layoutDirection),
+        top = targetBounds.top + systemBars.getTop(density),
+        right = targetBounds.right - systemBars.getRight(density, layoutDirection),
+        bottom = targetBounds.bottom - systemBars.getBottom(density),
+    )
+    // Scales the bitmap's own (unswapped) aspect ratio to fit within safeBounds, centered,
+    // without stretching. [constraintWidth]/[constraintHeight] are what the scale is computed
+    // against - for the landscape case these are the bitmap's dimensions SWAPPED, since
+    // rotationZ will swap the box's visual footprint right back once applied, so it's the
+    // POST-rotation footprint that actually needs to fit the screen, even though the box itself
+    // (pre-rotation) always keeps the bitmap's true width/height.
+    fun centeredFit(constraintWidth: Float, constraintHeight: Float): Rect {
+        val scale = minOf(safeBounds.width / constraintWidth, safeBounds.height / constraintHeight)
+        val boxSize = Size(bitmap.width * scale, bitmap.height * scale)
+        val topLeft = Offset(
+            safeBounds.center.x - boxSize.width / 2f,
+            safeBounds.center.y - boxSize.height / 2f,
+        )
+        return Rect(topLeft, boxSize)
+    }
+    val target = if (rotateToLandscape) {
+        centeredFit(constraintWidth = bitmap.height.toFloat(), constraintHeight = bitmap.width.toFloat())
+    } else {
+        centeredFit(constraintWidth = bitmap.width.toFloat(), constraintHeight = bitmap.height.toFloat())
+    }
+    val topLeft = lerp(sourceBounds.topLeft, target.topLeft, progress)
+    val size = lerp(sourceBounds.size, target.size, progress)
+    val rotation = if (rotateToLandscape) 90f * progress else 0f
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     Box(
         Modifier
             .fillMaxSize()
@@ -289,14 +340,25 @@ private fun FullscreenBarcodeOverlay(
                 onClick = onDismiss,
             ),
     ) {
-        with(density) {
-            Image(
-                bitmap.asImageBitmap(),
-                contentDescription = "Barcode",
-                modifier = Modifier
-                    .offset(x = topLeft.x.toDp(), y = topLeft.y.toDp())
-                    .size(width = size.width.toDp(), height = size.height.toDp()),
-            )
+        // Drawn directly on a Canvas (rather than an Image with an offset+size+graphicsLayer
+        // modifier chain) so the rotation pivot is an explicit, unambiguous Offset in the same
+        // absolute coordinate space as topLeft/size/safeBounds - no reliance on how nested
+        // layout/placement/graphicsLayer modifiers interact with constraints.
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .semantics { contentDescription = "Barcode" },
+        ) {
+            val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
+            val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            if (rotation == 0f) {
+                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+            } else {
+                val pivot = Offset(topLeft.x + size.width / 2f, topLeft.y + size.height / 2f)
+                rotate(degrees = rotation, pivot = pivot) {
+                    drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+                }
+            }
         }
     }
 }
