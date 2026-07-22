@@ -77,7 +77,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
@@ -267,6 +272,7 @@ fun PassDetailScreen(
                 targetBounds = target,
                 progress = barcodeProgress,
                 rotateToLandscape = !isSquareBarcode,
+                altText = p?.barcode?.altText,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -292,6 +298,7 @@ private fun FullscreenBarcodeOverlay(
     targetBounds: Rect,
     progress: Float,
     rotateToLandscape: Boolean,
+    altText: String?,
     onDismiss: () -> Unit,
 ) {
     // targetBounds is the raw Compose window size, which on an edge-to-edge window includes the
@@ -330,6 +337,7 @@ private fun FullscreenBarcodeOverlay(
     val size = lerp(sourceBounds.size, target.size, progress)
     val rotation = if (rotateToLandscape) 90f * progress else 0f
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val textMeasurer = rememberTextMeasurer()
     Box(
         Modifier
             .fillMaxSize()
@@ -343,7 +351,11 @@ private fun FullscreenBarcodeOverlay(
         // Drawn directly on a Canvas (rather than an Image with an offset+size+graphicsLayer
         // modifier chain) so the rotation pivot is an explicit, unambiguous Offset in the same
         // absolute coordinate space as topLeft/size/safeBounds - no reliance on how nested
-        // layout/placement/graphicsLayer modifiers interact with constraints.
+        // layout/placement/graphicsLayer modifiers interact with constraints. altText (if any) is
+        // drawn in the SAME rotate {} block as the barcode image, immediately below it in the
+        // pre-rotation coordinate space, so it's physically locked to the barcode - rotating and
+        // moving with it as a single unit through the whole animation, exactly like the caption
+        // on a real Wallet-app barcode card, rather than being tracked/positioned separately.
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -351,12 +363,28 @@ private fun FullscreenBarcodeOverlay(
         ) {
             val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
             val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
-            if (rotation == 0f) {
+            val textLayout = altText?.let {
+                textMeasurer.measure(
+                    text = it,
+                    style = TextStyle(color = Color.Black, fontSize = 12.sp, textAlign = TextAlign.Center),
+                    // fixedWidth, not maxWidth alone: a min of 0 would let the layout shrink to
+                    // the text's own natural (short) width, leaving textAlign=Center nothing to
+                    // center within - it needs to actually BE the full barcode width.
+                    constraints = Constraints.fixedWidth(dstSize.width),
+                )
+            }
+            fun drawBarcodeAndCaption() {
                 drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+                if (textLayout != null) {
+                    drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + 16f))
+                }
+            }
+            if (rotation == 0f) {
+                drawBarcodeAndCaption()
             } else {
                 val pivot = Offset(topLeft.x + size.width / 2f, topLeft.y + size.height / 2f)
                 rotate(degrees = rotation, pivot = pivot) {
-                    drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+                    drawBarcodeAndCaption()
                 }
             }
         }
@@ -416,13 +444,24 @@ private fun PassFrontContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         if (barcodeBitmap != null) {
+                            // Sized to the bitmap's own aspect ratio within a 240dp box, rather
+                            // than a fixed 240x240 square - a wide/short PDF417/Code128 bitmap in
+                            // a square box would otherwise be letterboxed by Image's default
+                            // ContentScale.Fit, leaving invisible empty space below the visible
+                            // barcode that pushed the alt text/voided-expired text too far away.
+                            val aspect = barcodeBitmap.width.toFloat() / barcodeBitmap.height.toFloat()
+                            val (imageWidth, imageHeight) = if (aspect >= 1f) {
+                                240.dp to 240.dp / aspect
+                            } else {
+                                240.dp * aspect to 240.dp
+                            }
                             Image(
                                 barcodeBitmap.asImageBitmap(),
                                 // Null while the fullscreen overlay owns the same "Barcode"
                                 // description, so accessibility services don't announce it twice.
                                 contentDescription = if (barcodeHidden) null else "Barcode",
                                 modifier = Modifier
-                                    .size(240.dp)
+                                    .size(width = imageWidth, height = imageHeight)
                                     .alpha(if (barcodeHidden) 0f else 1f)
                                     .onGloballyPositioned { onBarcodeBoundsChanged(it.boundsInRoot()) }
                                     .clickable(

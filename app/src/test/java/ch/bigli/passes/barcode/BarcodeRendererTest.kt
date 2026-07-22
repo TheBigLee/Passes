@@ -13,17 +13,20 @@ import org.robolectric.RobolectricTestRunner
 class BarcodeRendererTest {
     private val renderer = BarcodeRenderer()
 
-    @Test fun `renders qr to square bitmap of requested size`() {
+    // Trimmed to content + a small quiet zone (see BarcodeRenderer), so the bitmap is no longer
+    // exactly the requested size - just square and no bigger than what was requested.
+    @Test fun `renders qr to a square bitmap no larger than the requested size`() {
         val bmp = renderer.render(Barcode(BarcodeFormat.QR, "HELLO", null), 300, 300)
         assertNotNull(bmp)
-        assertEquals(300, bmp.width)
-        assertEquals(300, bmp.height)
+        assertEquals(bmp.width, bmp.height)
+        assertTrue(bmp.width in 1..300)
     }
 
-    @Test fun `renders code128 as wide bitmap`() {
+    @Test fun `renders code128 as a wide bitmap no larger than the requested size`() {
         val bmp = renderer.render(Barcode(BarcodeFormat.CODE128, "12345678", null), 600, 200)
-        assertEquals(600, bmp.width)
-        assertEquals(200, bmp.height)
+        assertTrue(bmp.width > bmp.height)
+        assertTrue(bmp.width in 1..600)
+        assertTrue(bmp.height in 1..200)
     }
 
     // Regression: ZXing's PDF417 writer returns a BitMatrix whose dimensions differ from the
