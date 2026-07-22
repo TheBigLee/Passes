@@ -25,17 +25,51 @@ class PassRepositoryLocalizationTest {
     private lateinit var db: PassDatabase
     private lateinit var repo: PassRepository
     private lateinit var originalLocale: Locale
+    private lateinit var server: TestHttpServer
+    private lateinit var base: String
 
     @Before fun setup() {
         originalLocale = Locale.getDefault()
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(ctx, PassDatabase::class.java).allowMainThreadQueries().build()
         repo = PassRepository(ctx, db.passDao(), PkPassImporter())
+        server = TestHttpServer()
+        server.start()
+        base = "http://127.0.0.1:${server.port}"
     }
 
     @After fun tearDown() {
         Locale.setDefault(originalLocale)
+        server.close()
         db.close()
+    }
+
+    /**
+     * A pkpass with a webServiceURL/authToken pointing at the given base, so refreshPass has
+     * something to poll. Mirrors the helper in PassRepositoryRefreshTest.kt.
+     */
+    private fun buildPkPass(webServiceUrl: String, serial: String = "SN1"): ByteArray {
+        val json = """
+            {
+              "formatVersion": 1,
+              "passTypeIdentifier": "pass.test",
+              "serialNumber": "$serial",
+              "teamIdentifier": "TEAM",
+              "organizationName": "Acme",
+              "description": "Test pass",
+              "webServiceURL": "$webServiceUrl",
+              "authenticationToken": "tok-123",
+              "voided": false,
+              "generic": { "primaryFields": [] }
+            }
+        """.trimIndent()
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zip ->
+            zip.putNextEntry(ZipEntry("pass.json"))
+            zip.write(json.toByteArray())
+            zip.closeEntry()
+        }
+        return out.toByteArray()
     }
 
     /**
@@ -122,5 +156,23 @@ class PassRepositoryLocalizationTest {
         val imported = repo.import(buildMultilingualPkPass(), "trip.pkpass")
         repo.updateTitle(imported.id, "My Trip")
         assertTrue(repo.getById(imported.id)!!.titleCustomized)
+    }
+
+    @Test fun `a manually-renamed title survives a background refresh`() = runTest {
+        val imported = repo.import(buildPkPass(base), "trip.pkpass")
+        repo.updateTitle(imported.id, "My Trip")
+
+        server.respond("/v1/passes/pass.test/SN1") {
+            TestHttpServer.Response(200, buildPkPass(base))
+        }
+
+        val result = repo.refreshPass(imported.id)
+        check(result is RefreshResult.Updated)
+        assertEquals("My Trip", result.pass.title)
+        assertTrue(result.pass.titleCustomized)
+
+        val stored = repo.getById(imported.id)!!
+        assertEquals("My Trip", stored.title)
+        assertTrue(stored.titleCustomized)
     }
 }
