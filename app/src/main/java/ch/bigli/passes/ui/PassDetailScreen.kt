@@ -269,13 +269,19 @@ fun PassDetailScreen(
         val source = barcodeSourceBounds
         val target = rootBounds
         if (bmp != null && source != null && target != null && barcodeProgress > 0f) {
+            // Same voided/expired-replaces-altText rule as the inline barcode caption below.
+            val captionText = when {
+                p?.voided == true -> "This pass has been voided by the issuer"
+                p?.expirationDate?.isBefore(java.time.Instant.now()) == true -> "This pass has expired"
+                else -> p?.barcode?.altText
+            }
             FullscreenBarcodeOverlay(
                 bitmap = bmp,
                 sourceBounds = source,
                 targetBounds = target,
                 progress = barcodeProgress,
                 rotateToLandscape = !isSquareBarcode,
-                altText = p?.barcode?.altText,
+                altText = captionText,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -478,22 +484,15 @@ private fun PassFrontContent(
                                     ),
                             )
                         }
-                        if (pass.voided) {
-                            Text(
-                                "This pass has been voided by the issuer",
-                                color = Color.Black,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        } else if (pass.expirationDate?.isBefore(java.time.Instant.now()) == true) {
-                            Text(
-                                "This pass has expired",
-                                color = Color.Black,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
+                        // A voided/expired status message replaces the alt text entirely,
+                        // rather than stacking below it - the barcode's own caption isn't
+                        // meaningful once the pass can't actually be used to scan.
+                        val captionText = when {
+                            pass.voided -> "This pass has been voided by the issuer"
+                            pass.expirationDate?.isBefore(java.time.Instant.now()) == true -> "This pass has expired"
+                            else -> bc.altText
                         }
-                        bc.altText?.let {
+                        captionText?.let {
                             Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
