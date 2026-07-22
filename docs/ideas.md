@@ -67,3 +67,17 @@ Points to investigate when picked up:
   animation) that shows the back-field content, then flips back.
 - **Scope:** manually-entered/PDF passes have no natural source for back fields — this is
   pkpass-only for now.
+
+## Fullscreen the barcode/QR code
+
+Tapping the barcode on `PassDetailScreen` should open it fullscreen (max brightness, max size)
+for easier scanning, instead of the current fixed 240dp inline size.
+
+Points to investigate when picked up:
+- **Trigger:** tap-to-expand on the existing barcode `Image`, dismiss via tap/back.
+- **Content:** decide whether the voided/expired notice (currently shown directly under the
+  barcode on the regular screen) should also appear in the fullscreen view — a scanner staring
+  at a fullscreen barcode arguably still needs to see it's void/expired.
+- **Brightness:** the screen is already boosted to full brightness while `PassDetailScreen` is
+  visible (see the `DisposableEffect` there), so fullscreen mode doesn't need its own brightness
+  handling, just bigger scale.
