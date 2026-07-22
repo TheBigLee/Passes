@@ -57,10 +57,10 @@ fun GenericFieldsLayout(pass: Pass, fg: Color) {
 }
 
 @Composable
-private fun GenericField(field: PassField, fg: Color) {
+private fun GenericField(field: PassField, fg: Color, alignment: Alignment.Horizontal = Alignment.CenterHorizontally) {
     Column(
         Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = alignment,
     ) {
         Text(field.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
         Text(field.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -83,7 +83,7 @@ fun BoardingHeaderRow(pass: Pass, fg: Color) {
         header.forEach { f ->
             Column(
                 Modifier.padding(start = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
             ) {
                 Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 11.sp)
                 Text(f.value, color = fg, fontSize = 18.sp, fontWeight = FontWeight.Medium)
@@ -119,7 +119,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
                     Icons.Filled.Flight,
                     contentDescription = null,
                     tint = fg,
-                    modifier = Modifier.size(28.dp).graphicsLayer(rotationZ = -45f),
+                    modifier = Modifier.size(28.dp).graphicsLayer(rotationZ = 90f),
                 )
                 BoardingPrimaryField(primary[1], fg)
             }
@@ -129,7 +129,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
         }
         if (auxiliary.isNotEmpty()) {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                auxiliary.forEach { GenericField(it, fg) }
+                auxiliary.forEach { GenericField(it, fg, Alignment.Start) }
             }
         }
         if (secondary.isNotEmpty()) {
@@ -137,7 +137,12 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
                 Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                secondary.forEach { GenericField(it, fg) }
+                secondary.forEachIndexed { index, f ->
+                    // Exactly 2 secondary fields (e.g. passenger/status) is the common case -
+                    // first left-aligned, second right-aligned, matching the Wallet reference.
+                    val alignment = if (secondary.size == 2 && index == 1) Alignment.End else Alignment.Start
+                    GenericField(f, fg, alignment)
+                }
             }
         }
     }
