@@ -2,6 +2,19 @@
 
 Unscheduled feature ideas to investigate later. Not yet designed or committed to.
 
+## Stronger CI checks: full lintRelease + static analyzer
+
+CI currently runs `lintVitalRelease` (fatal-only lint) and `assembleRelease` on every PR (added
+2026-07-22 after a release-only manifest-merge lint error slipped through to a merged PR). Two
+further checks were considered and deliberately deferred:
+
+- **Full `lintRelease`** (not just Vital) as a non-blocking/reporting step — surfaces real
+  warnings (deprecated APIs, resource issues, etc.), not just fatal errors. Needs a lint baseline
+  file first, since there's likely a backlog of pre-existing warnings that would otherwise show
+  as noise on every unrelated PR.
+- **A static analyzer (ktlint or detekt)** — not configured at all today. Needs a plugin
+  addition plus an initial cleanup pass to establish a clean baseline before it can gate PRs.
+
 ## Reminder notification to open the pass before the event/flight
 
 Notify the user to open/show the pass in the app ahead of the relevant time (e.g. before a
