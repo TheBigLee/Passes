@@ -59,6 +59,8 @@ class PkPassImporter : PassImporter {
             rawFilePath = rawFilePath,
             sourceFormat = SourceFormat.PKPASS,
             updateInfo = update,
+            expirationDate = pj.expirationDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+            voided = pj.voided ?: false,
         )
     }
 

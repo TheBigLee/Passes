@@ -11,6 +11,8 @@ data class PkPassJson(
     val backgroundColor: String? = null,
     val foregroundColor: String? = null,
     val relevantDate: String? = null,
+    val expirationDate: String? = null,
+    val voided: Boolean? = null,
     val barcode: PkBarcode? = null,
     val barcodes: List<PkBarcode>? = null,
     val webServiceURL: String? = null,

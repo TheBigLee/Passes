@@ -28,6 +28,9 @@ data class PassEntity(
     val rawFilePath: String,
     val sourceFormat: String,
     val updateInfoJson: String?,
+    val voided: Boolean = false,
+    val lastModified: String? = null,
+    val expirationDateEpoch: Long? = null,
 )
 
 fun Pass.toEntity() = PassEntity(
@@ -44,6 +47,9 @@ fun Pass.toEntity() = PassEntity(
     rawFilePath = rawFilePath,
     sourceFormat = sourceFormat.name,
     updateInfoJson = updateInfo?.let { json.encodeToString(UpdateInfo.serializer(), it) },
+    voided = voided,
+    lastModified = lastModified,
+    expirationDateEpoch = expirationDate?.toEpochMilli(),
 )
 
 fun PassEntity.toDomain() = Pass(
@@ -60,4 +66,7 @@ fun PassEntity.toDomain() = Pass(
     rawFilePath = rawFilePath,
     sourceFormat = SourceFormat.valueOf(sourceFormat),
     updateInfo = updateInfoJson?.let { json.decodeFromString(UpdateInfo.serializer(), it) },
+    voided = voided,
+    lastModified = lastModified,
+    expirationDate = expirationDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
 )
