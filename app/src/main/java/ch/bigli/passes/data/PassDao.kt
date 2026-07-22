@@ -11,7 +11,7 @@ interface PassDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: PassEntity)
 
-    @Query("SELECT * FROM passes ORDER BY relevantDateEpoch IS NULL, relevantDateEpoch ASC, title ASC")
+    @Query("SELECT * FROM passes ORDER BY relevantDateEpoch IS NULL, relevantDateEpoch ASC, subtitle ASC")
     fun observeAll(): Flow<List<PassEntity>>
 
     @Query("SELECT * FROM passes WHERE id = :id")
@@ -19,9 +19,6 @@ interface PassDao {
 
     @Query("DELETE FROM passes WHERE id = :id")
     suspend fun deleteById(id: String)
-
-    @Query("UPDATE passes SET title = :title, titleCustomized = 1 WHERE id = :id")
-    suspend fun updateTitle(id: String, title: String)
 
     @Query("UPDATE passes SET voided = 1 WHERE id = :id")
     suspend fun markVoided(id: String)

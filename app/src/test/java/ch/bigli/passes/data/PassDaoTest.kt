@@ -26,7 +26,7 @@ class PassDaoTest {
     private lateinit var dao: PassDao
 
     private fun sample(id: String) = Pass(
-        id = id, type = PassType.EVENT, title = "Concert", subtitle = "Venue",
+        id = id, type = PassType.EVENT, subtitle = "Venue",
         organization = "Org", bgColor = 0xFF34A853, fgColor = 0xFFFFFFFF,
         fields = listOf(PassField("WHEN", "21:00", FieldPosition.PRIMARY)),
         barcode = Barcode(BarcodeFormat.QR, "XYZ", "XYZ"),
@@ -47,15 +47,25 @@ class PassDaoTest {
         val all = dao.observeAll().first()
         assertEquals(1, all.size)
         val roundTripped = all.first().toDomain()
-        assertEquals("Concert", roundTripped.title)
+        assertEquals("Org", roundTripped.organization)
         assertEquals(BarcodeFormat.QR, roundTripped.barcode!!.format)
         assertEquals("21:00", roundTripped.fields.first().value)
     }
 
     @Test fun `getById then delete removes it`() = runTest {
         dao.insert(sample("b").toEntity())
-        assertEquals("Concert", dao.getById("b")!!.toDomain().title)
+        assertEquals("Org", dao.getById("b")!!.toDomain().organization)
         dao.deleteById("b")
         assertNull(dao.getById("b"))
+    }
+
+    @Test fun `backFields round-trip through the entity json column`() = runTest {
+        val pass = sample("c").copy(backFields = listOf(PassField("Terms", "Non-refundable", FieldPosition.BACK)))
+        dao.insert(pass.toEntity())
+        val stored = dao.getById("c")!!.toDomain()
+        assertEquals(1, stored.backFields.size)
+        assertEquals("Terms", stored.backFields.first().label)
+        assertEquals("Non-refundable", stored.backFields.first().value)
+        assertEquals(FieldPosition.BACK, stored.backFields.first().position)
     }
 }

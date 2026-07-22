@@ -23,9 +23,8 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 /**
  * Adds `description` (raw pass.json description, needed to recompute title live) and
  * `titleCustomized` (protects a user-renamed title from being overwritten by live
- * re-translation). Existing rows get `description = NULL`, `titleCustomized = 0` — every
- * pre-existing pass is treated as "not customized," so its title starts being live-recomputed
- * in the current locale after this update, which is the desired behavior.
+ * re-translation). Both are superseded by [MIGRATION_4_5] — kept here unchanged since this is
+ * exactly how a real v3-installed user's database gets upgraded on the way to v5.
  */
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -34,7 +33,37 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
-@Database(entities = [PassEntity::class], version = 4, exportSchema = false)
+/**
+ * Drops `title`/`titleCustomized` (the rename feature and the synthesized title it protected are
+ * both removed) and adds `backFieldsJson` (pkpass back-of-pass info, live-translated the same way
+ * as the other field lists). SQLite's native `DROP COLUMN` (3.35+) isn't safely available across
+ * this app's full `minSdk` range, so this rebuilds the table: create the new shape, copy every
+ * other column across, drop the old table, rename the new one into place.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE `passes_new` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `subtitle` TEXT, " +
+                "`organization` TEXT, `bgColor` INTEGER, `fgColor` INTEGER, `fieldsJson` TEXT NOT NULL, " +
+                "`barcodeJson` TEXT, `relevantDateEpoch` INTEGER, `rawFilePath` TEXT NOT NULL, " +
+                "`sourceFormat` TEXT NOT NULL, `updateInfoJson` TEXT, `voided` INTEGER NOT NULL DEFAULT 0, " +
+                "`lastModified` TEXT, `expirationDateEpoch` INTEGER, `description` TEXT, " +
+                "`backFieldsJson` TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "INSERT INTO passes_new (id, type, subtitle, organization, bgColor, fgColor, fieldsJson, " +
+                "barcodeJson, relevantDateEpoch, rawFilePath, sourceFormat, updateInfoJson, voided, " +
+                "lastModified, expirationDateEpoch, description, backFieldsJson) " +
+                "SELECT id, type, subtitle, organization, bgColor, fgColor, fieldsJson, barcodeJson, " +
+                "relevantDateEpoch, rawFilePath, sourceFormat, updateInfoJson, voided, lastModified, " +
+                "expirationDateEpoch, description, '[]' FROM passes"
+        )
+        db.execSQL("DROP TABLE passes")
+        db.execSQL("ALTER TABLE passes_new RENAME TO passes")
+    }
+}
+
+@Database(entities = [PassEntity::class], version = 5, exportSchema = false)
 abstract class PassDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 }
