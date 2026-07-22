@@ -64,11 +64,19 @@ jobs:
       - name: Name the APK after the version
         run: cp app/build/outputs/apk/release/app-release.apk "Passes-${{ steps.ver.outputs.tag }}.apk"
 
+      - name: Build changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          toTag: ${{ steps.ver.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: Passes ${{ steps.ver.outputs.tag }}
+          body: ${{ steps.build_changelog.outputs.changelog }}
           files: Passes-${{ steps.ver.outputs.tag }}.apk
-          generate_release_notes: true
           fail_on_unmatched_files: true
