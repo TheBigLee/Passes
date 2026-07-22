@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -145,28 +146,8 @@ fun PassDetailScreen(
             onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
+            val isVoidedOrExpired = p.voided || p.expirationDate?.isBefore(java.time.Instant.now()) == true
             Column(Modifier.fillMaxSize()) {
-                if (p.voided) {
-                    Text(
-                        "This pass has been voided by the issuer",
-                        color = fg,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.25f))
-                            .padding(8.dp),
-                    )
-                } else if (p.expirationDate?.isBefore(java.time.Instant.now()) == true) {
-                    Text(
-                        "This pass has expired",
-                        color = fg,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.25f))
-                            .padding(8.dp),
-                    )
-                }
                 strip?.let {
                     Image(
                         it.asImageBitmap(),
@@ -197,10 +178,29 @@ fun PassDetailScreen(
                             if (square) renderer.render(bc, 600, 600) else renderer.render(bc, 800, 300)
                         }
                         Column(
-                            Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(16.dp),
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .padding(16.dp)
+                                .alpha(if (isVoidedOrExpired) 0.35f else 1f),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Image(bmp.asImageBitmap(), contentDescription = "Barcode", modifier = Modifier.size(240.dp))
+                            if (p.voided) {
+                                Text(
+                                    "This pass has been voided by the issuer",
+                                    color = Color.Black,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            } else if (p.expirationDate?.isBefore(java.time.Instant.now()) == true) {
+                                Text(
+                                    "This pass has expired",
+                                    color = Color.Black,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
                             bc.altText?.let {
                                 Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                             }
