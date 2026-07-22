@@ -27,8 +27,11 @@ import ch.bigli.passes.domain.PassField
 
 /**
  * Field layout for every pass type except BOARDING (which uses [BoardingFieldsLayout]).
- * Stacks PRIMARY fields full-width and large, then flows SECONDARY/AUXILIARY fields below -
- * nothing is capped or dropped, matching how Google Wallet renders an event ticket.
+ * Each PRIMARY field gets its own full-width, left-aligned line (event name, then product,
+ * etc.) - then SECONDARY fields flow left-to-right below that, then AUXILIARY fields render
+ * as a row (first left-aligned, last right-aligned when there are exactly 2 - e.g. attendee
+ * name / entry date). Nothing is capped or dropped, matching how Google Wallet renders an
+ * event ticket.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -37,31 +40,80 @@ fun GenericFieldsLayout(pass: Pass, fg: Color) {
     val secondary = pass.fields.filter { it.position == FieldPosition.SECONDARY }
     val auxiliary = pass.fields.filter { it.position == FieldPosition.AUXILIARY }
 
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
         primary.forEach { f ->
             Column(
                 Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
             ) {
                 Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
                 Text(f.value, color = fg, fontSize = 20.sp, fontWeight = FontWeight.Medium)
             }
         }
-        if (secondary.isNotEmpty() || auxiliary.isNotEmpty()) {
+        if (secondary.isNotEmpty()) {
             Spacer(Modifier.size(16.dp))
+            FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                secondary.forEachIndexed { index, f ->
+                    // The first field has no leading padding, unlike GenericField's default -
+                    // it must sit flush left to line up with the PRIMARY line(s) above it.
+                    val modifier = if (index == 0) {
+                        Modifier.padding(top = 4.dp, end = 8.dp, bottom = 4.dp)
+                    } else {
+                        Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    }
+                    GenericField(f, fg, Alignment.Start, modifier = modifier)
+                }
+            }
         }
-        FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            (secondary + auxiliary).forEach { f -> GenericField(f, fg) }
+        if (auxiliary.isNotEmpty()) {
+            Spacer(Modifier.size(8.dp))
+            // The second field's own text stays left-aligned (matching every other field's
+            // label/value justification) even though the field itself sits on the right of
+            // the row.
+            FieldsRow(auxiliary, fg, lastFieldTextAlignment = Alignment.Start)
+        }
+    }
+}
+
+/**
+ * Renders a group of fields as one row. Exactly 2 fields is the common case - e.g.
+ * attendee name / entry date, or passenger / status - and renders with the first flush
+ * left and the second flush right (no horizontal inset, unlike [GenericField]'s default
+ * padding, since these must sit at the row's true edges to line up with the flush-left
+ * PRIMARY line above). Any other count flows left-to-right instead, since "first left /
+ * last right" only reads as intentional pairing for exactly 2 fields.
+ *
+ * [lastFieldTextAlignment] controls only the second field's own label/value text
+ * justification within its column, independent of its position in the row (which is
+ * always pinned right by [Arrangement.SpaceBetween]).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FieldsRow(
+    fields: List<PassField>,
+    fg: Color,
+    lastFieldTextAlignment: Alignment.Horizontal = Alignment.End,
+) {
+    if (fields.size == 2) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            GenericField(fields[0], fg, Alignment.Start, modifier = Modifier.padding(vertical = 4.dp))
+            GenericField(fields[1], fg, lastFieldTextAlignment, modifier = Modifier.padding(vertical = 4.dp))
+        }
+    } else {
+        FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            fields.forEach { GenericField(it, fg, Alignment.Start) }
         }
     }
 }
 
 @Composable
-private fun GenericField(field: PassField, fg: Color, alignment: Alignment.Horizontal = Alignment.CenterHorizontally) {
-    Column(
-        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = alignment,
-    ) {
+private fun GenericField(
+    field: PassField,
+    fg: Color,
+    alignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    modifier: Modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+) {
+    Column(modifier, horizontalAlignment = alignment) {
         Text(field.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
         Text(field.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
@@ -136,17 +188,8 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
             }
         }
         if (secondary.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                secondary.forEachIndexed { index, f ->
-                    // Exactly 2 secondary fields (e.g. passenger/status) is the common case -
-                    // first left-aligned, second right-aligned, matching the Wallet reference.
-                    val alignment = if (secondary.size == 2 && index == 1) Alignment.End else Alignment.Start
-                    GenericField(f, fg, alignment)
-                }
-            }
+            Spacer(Modifier.size(8.dp))
+            FieldsRow(secondary, fg)
         }
     }
 }
