@@ -88,4 +88,43 @@ class PkPassImporterTest {
         assertEquals(false, pass.voided)
         assertEquals(null, pass.expirationDate)
     }
+
+    @Test fun `stores the raw description for later live title recomputation`() {
+        val passJson = """
+            {
+              "formatVersion": 1,
+              "passTypeIdentifier": "pass.test",
+              "serialNumber": "SN1",
+              "teamIdentifier": "TEAM",
+              "organizationName": "Acme",
+              "description": "Some description",
+              "generic": { "primaryFields": [] }
+            }
+        """.trimIndent()
+        val pass = importer.import(buildPkPass(passJson), "/data/x.pkpass", "x.pkpass")
+        assertEquals("Some description", pass.description)
+    }
+
+    @Test fun `a primary field with no label falls back to its value for both display and title`() {
+        val passJson = """
+            {
+              "formatVersion": 1,
+              "passTypeIdentifier": "pass.test",
+              "serialNumber": "SN1",
+              "teamIdentifier": "TEAM",
+              "organizationName": "Acme",
+              "description": "Some description",
+              "boardingPass": {
+                "primaryFields": [
+                  { "key": "origin", "value": "ZRH" },
+                  { "key": "dest", "value": "JFK" }
+                ]
+              }
+            }
+        """.trimIndent()
+        val pass = importer.import(buildPkPass(passJson), "/data/x.pkpass", "x.pkpass")
+        assertEquals("ZRH → JFK", pass.title)
+        val primaryLabels = pass.fields.filter { it.position == FieldPosition.PRIMARY }.map { it.label }
+        assertEquals(listOf("ZRH", "JFK"), primaryLabels)
+    }
 }
