@@ -36,3 +36,6 @@ jobs:
 
       - name: Release lint (catches release-only issues, e.g. manifest merge errors)
         run: ./gradlew :app:lintVitalRelease --stacktrace
+
+      - name: Release build (unsigned; exercises the full release packaging path)
+        run: ./gradlew :app:assembleRelease --stacktrace
