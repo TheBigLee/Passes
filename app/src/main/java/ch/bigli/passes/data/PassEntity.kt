@@ -31,6 +31,8 @@ data class PassEntity(
     val voided: Boolean = false,
     val lastModified: String? = null,
     val expirationDateEpoch: Long? = null,
+    val description: String? = null,
+    val titleCustomized: Boolean = false,
 )
 
 fun Pass.toEntity() = PassEntity(
@@ -50,6 +52,8 @@ fun Pass.toEntity() = PassEntity(
     voided = voided,
     lastModified = lastModified,
     expirationDateEpoch = expirationDate?.toEpochMilli(),
+    description = description,
+    titleCustomized = titleCustomized,
 )
 
 fun PassEntity.toDomain() = Pass(
@@ -69,4 +73,6 @@ fun PassEntity.toDomain() = Pass(
     voided = voided,
     lastModified = lastModified,
     expirationDate = expirationDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
+    description = description,
+    titleCustomized = titleCustomized,
 )
