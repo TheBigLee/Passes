@@ -19,12 +19,9 @@ class PdfImporter(private val scanner: BarcodeScanner = BarcodeScanner()) : Pass
 
     override fun import(bytes: ByteArray, rawFilePath: String, displayName: String): Pass {
         val barcode = extractBarcode(File(rawFilePath)) ?: throw ImportError.NoBarcode(displayName)
-        val base = if (displayName.endsWith(".pdf", ignoreCase = true)) displayName.dropLast(4) else displayName
-        val title = base.ifBlank { "PDF ticket" }
         return Pass(
             id = UUID.randomUUID().toString(),
             type = PassType.GENERIC,
-            title = title,
             subtitle = null,
             organization = null,
             bgColor = null,

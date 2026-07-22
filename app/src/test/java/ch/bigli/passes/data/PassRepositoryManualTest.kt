@@ -29,9 +29,8 @@ class PassRepositoryManualTest {
     @After fun tearDown() = db.close()
 
     @Test fun `createManualPass stores a MANUAL generic pass`() = runTest {
-        val pass = repo.createManualPass("Coop card", BarcodeFormat.CODE128, "6001234567890")
+        val pass = repo.createManualPass(BarcodeFormat.CODE128, "6001234567890")
         val stored = repo.getById(pass.id)!!
-        assertEquals("Coop card", stored.title)
         assertEquals(PassType.GENERIC, stored.type)
         assertEquals(SourceFormat.MANUAL, stored.sourceFormat)
         assertEquals(BarcodeFormat.CODE128, stored.barcode!!.format)

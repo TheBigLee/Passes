@@ -17,7 +17,6 @@ private val json = Json { ignoreUnknownKeys = true }
 data class PassEntity(
     @PrimaryKey val id: String,
     val type: String,
-    val title: String,
     val subtitle: String?,
     val organization: String?,
     val bgColor: Long?,
@@ -32,13 +31,12 @@ data class PassEntity(
     val lastModified: String? = null,
     val expirationDateEpoch: Long? = null,
     val description: String? = null,
-    val titleCustomized: Boolean = false,
+    val backFieldsJson: String = "[]",
 )
 
 fun Pass.toEntity() = PassEntity(
     id = id,
     type = type.name,
-    title = title,
     subtitle = subtitle,
     organization = organization,
     bgColor = bgColor,
@@ -53,18 +51,18 @@ fun Pass.toEntity() = PassEntity(
     lastModified = lastModified,
     expirationDateEpoch = expirationDate?.toEpochMilli(),
     description = description,
-    titleCustomized = titleCustomized,
+    backFieldsJson = json.encodeToString(ListSerializer(PassField.serializer()), backFields),
 )
 
 fun PassEntity.toDomain() = Pass(
     id = id,
     type = PassType.valueOf(type),
-    title = title,
     subtitle = subtitle,
     organization = organization,
     bgColor = bgColor,
     fgColor = fgColor,
     fields = json.decodeFromString(ListSerializer(PassField.serializer()), fieldsJson),
+    backFields = json.decodeFromString(ListSerializer(PassField.serializer()), backFieldsJson),
     barcode = barcodeJson?.let { json.decodeFromString(Barcode.serializer(), it) },
     relevantDate = relevantDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
     rawFilePath = rawFilePath,
@@ -74,5 +72,4 @@ fun PassEntity.toDomain() = Pass(
     lastModified = lastModified,
     expirationDate = expirationDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
     description = description,
-    titleCustomized = titleCustomized,
 )

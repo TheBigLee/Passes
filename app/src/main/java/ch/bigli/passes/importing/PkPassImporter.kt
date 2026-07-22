@@ -9,7 +9,6 @@ import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.domain.UpdateInfo
-import ch.bigli.passes.domain.computeTitle
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.util.UUID
@@ -33,7 +32,7 @@ class PkPassImporter : PassImporter {
             structure?.secondaryFields?.forEach { add(it.toField(FieldPosition.SECONDARY)) }
             structure?.auxiliaryFields?.forEach { add(it.toField(FieldPosition.AUXILIARY)) }
         }
-        val title = computeTitle(fields, pj.description, pj.organizationName)
+        val backFields = structure?.backFields.orEmpty().map { it.toField(FieldPosition.BACK) }
 
         val update = if (!pj.webServiceURL.isNullOrBlank() && !pj.authenticationToken.isNullOrBlank()
             && !pj.serialNumber.isNullOrBlank() && !pj.passTypeIdentifier.isNullOrBlank()
@@ -44,13 +43,13 @@ class PkPassImporter : PassImporter {
         return Pass(
             id = UUID.randomUUID().toString(),
             type = type,
-            title = title,
             subtitle = pj.organizationName,
             organization = pj.organizationName,
             description = pj.description,
             bgColor = parseColor(pj.backgroundColor),
             fgColor = parseColor(pj.foregroundColor),
             fields = fields,
+            backFields = backFields,
             barcode = resolveBarcode(pj),
             relevantDate = pj.relevantDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
             rawFilePath = rawFilePath,

@@ -89,7 +89,7 @@ class PkPassImporterTest {
         assertEquals(null, pass.expirationDate)
     }
 
-    @Test fun `stores the raw description for later live title recomputation`() {
+    @Test fun `parses backFields into Pass backFields`() {
         val passJson = """
             {
               "formatVersion": 1,
@@ -97,34 +97,33 @@ class PkPassImporterTest {
               "serialNumber": "SN1",
               "teamIdentifier": "TEAM",
               "organizationName": "Acme",
-              "description": "Some description",
-              "generic": { "primaryFields": [] }
-            }
-        """.trimIndent()
-        val pass = importer.import(buildPkPass(passJson), "/data/x.pkpass", "x.pkpass")
-        assertEquals("Some description", pass.description)
-    }
-
-    @Test fun `a primary field with no label falls back to its value for both display and title`() {
-        val passJson = """
-            {
-              "formatVersion": 1,
-              "passTypeIdentifier": "pass.test",
-              "serialNumber": "SN1",
-              "teamIdentifier": "TEAM",
-              "organizationName": "Acme",
-              "description": "Some description",
-              "boardingPass": {
-                "primaryFields": [
-                  { "key": "origin", "value": "ZRH" },
-                  { "key": "dest", "value": "JFK" }
+              "generic": {
+                "primaryFields": [],
+                "backFields": [
+                  { "key": "terms", "label": "Terms", "value": "Non-refundable" }
                 ]
               }
             }
         """.trimIndent()
         val pass = importer.import(buildPkPass(passJson), "/data/x.pkpass", "x.pkpass")
-        assertEquals("ZRH → JFK", pass.title)
-        val primaryLabels = pass.fields.filter { it.position == FieldPosition.PRIMARY }.map { it.label }
-        assertEquals(listOf("ZRH", "JFK"), primaryLabels)
+        assertEquals(1, pass.backFields.size)
+        assertEquals("Terms", pass.backFields.first().label)
+        assertEquals("Non-refundable", pass.backFields.first().value)
+        assertEquals(FieldPosition.BACK, pass.backFields.first().position)
+    }
+
+    @Test fun `backFields defaults to empty when absent`() {
+        val passJson = """
+            {
+              "formatVersion": 1,
+              "passTypeIdentifier": "pass.test",
+              "serialNumber": "SN1",
+              "teamIdentifier": "TEAM",
+              "organizationName": "Acme",
+              "generic": { "primaryFields": [] }
+            }
+        """.trimIndent()
+        val pass = importer.import(buildPkPass(passJson), "/data/x.pkpass", "x.pkpass")
+        assertEquals(emptyList<Any>(), pass.backFields)
     }
 }

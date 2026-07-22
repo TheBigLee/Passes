@@ -36,9 +36,11 @@ Points to investigate when picked up:
 ## Structured form when adding a plain barcode/QR code
 
 When creating a pass via manual entry or camera scan (the `MANUAL` create flow), the current
-form only asks for title + barcode value + format. Instead, offer a proper structured form to
-fill in the missing context Apple Wallet passes normally carry — e.g. event location, date, and
-time for an event-style pass, or departure date/time for a boarding-pass-style one.
+form only asks for barcode value + format — since the title field was removed entirely (it was a
+synthesized value, not an actual Apple pkpass field), manually-created and PDF-imported passes now
+carry no identifying text at all. Instead, offer a proper structured form to fill in the missing
+context Apple Wallet passes normally carry — e.g. event location, date, and time for an
+event-style pass, or departure date/time for a boarding-pass-style one.
 
 Points to investigate when picked up:
 - **Trigger:** ask the user to pick a pass "kind" (event, boarding, loyalty, generic) up front,
@@ -47,22 +49,6 @@ Points to investigate when picked up:
   (`relevantDate`, `PassField`s with `FieldPosition`) so they render the same as imported passes
   and can feed the reminder-notification idea above.
 - **Scope creep risk:** keep this a lightweight form, not a full pass-authoring tool.
-
-## Support pkpass "back fields"
-
-Apple's pkpass format lets a pass declare `backFields` (in addition to header/primary/
-secondary/auxiliary fields) — extra key/value info meant to be shown on the "back" of the pass,
-revealed by tapping/flipping it. `PkPassImporter`/`Pass` currently don't parse or store
-`backFields` at all, so this information is silently dropped on import.
-
-Points to investigate when picked up:
-- **Data model:** parse `backFields` in `PkPassJson`/`PkPassImporter` similarly to the existing
-  field positions, and add a place to store them on `Pass` (a new `backFields: List<PassField>`,
-  reusing `FieldPosition` or a dedicated marker).
-- **UI:** add a flip/reveal affordance on `PassDetailScreen` (e.g. a button or tap-to-flip
-  animation) that shows the back-field content, then flips back.
-- **Scope:** manually-entered/PDF passes have no natural source for back fields — this is
-  pkpass-only for now.
 
 ## Fullscreen the barcode/QR code
 

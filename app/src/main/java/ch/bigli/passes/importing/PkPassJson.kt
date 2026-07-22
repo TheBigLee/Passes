@@ -37,6 +37,7 @@ data class PkStructure(
     val primaryFields: List<PkField>? = null,
     val secondaryFields: List<PkField>? = null,
     val auxiliaryFields: List<PkField>? = null,
+    val backFields: List<PkField>? = null,
 )
 
 @Serializable

@@ -26,7 +26,6 @@ import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.domain.Barcode
 import ch.bigli.passes.domain.Pass
-import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.images.PassImageLoader
 import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.CreatePassScreen
@@ -90,8 +89,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** PDF-sourced passes open the title editor on arrival; others don't. */
-private fun Pass.toPending() = PendingPass(id, editTitle = sourceFormat == SourceFormat.PDF)
+private fun Pass.toPending() = PendingPass(id)
 
 private class VmFactory(private val create: () -> ViewModel) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -107,7 +105,7 @@ private fun AppNav(app: PassApp) {
     val pending by app.pendingPass.collectAsState()
     LaunchedEffect(pending) {
         pending?.let { p ->
-            nav.navigate("detail/${p.id}?editTitle=${p.editTitle}")
+            nav.navigate("detail/${p.id}")
             app.pendingPass.value = null
         }
     }
@@ -152,9 +150,9 @@ private fun AppNav(app: PassApp) {
             val prefill: Barcode? = remember { app.pendingScan.value }
             CreatePassScreen(
                 prefill = prefill,
-                onCreate = { title, format, value ->
+                onCreate = { format, value ->
                     scope.launch {
-                        val pass = repo.createManualPass(title, format, value)
+                        val pass = repo.createManualPass(format, value)
                         app.pendingScan.value = null
                         nav.navigate("detail/${pass.id}") { popUpTo("list") }
                     }
@@ -163,20 +161,15 @@ private fun AppNav(app: PassApp) {
             )
         }
         composable(
-            "detail/{id}?editTitle={editTitle}",
-            arguments = listOf(
-                navArgument("id") { type = NavType.StringType },
-                navArgument("editTitle") { type = NavType.BoolType; defaultValue = false },
-            ),
+            "detail/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.StringType }),
         ) { entry ->
             val id = entry.arguments!!.getString("id")!!
-            val editTitle = entry.arguments!!.getBoolean("editTitle")
             val vm: PassDetailViewModel = viewModel(factory = VmFactory { PassDetailViewModel(repo, id) })
             PassDetailScreen(
                 viewModel = vm,
                 imageLoader = imageLoader,
                 onBack = { nav.popBackStack() },
-                openTitleEditor = editTitle,
             )
         }
     }

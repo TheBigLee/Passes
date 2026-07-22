@@ -67,7 +67,7 @@ class PassUpdateWorkerTest {
     @Test fun `worker refreshes only pkpass passes with updateInfo that are not already voided`() = runTest {
         val eligible = repo.import(buildPkPass(serial = "ELIGIBLE"), "eligible.pkpass")
         val alreadyVoidedSource = repo.import(buildPkPass(serial = "ALREADY-VOIDED"), "voided.pkpass")
-        val manual = repo.createManualPass("Coop card", BarcodeFormat.CODE128, "6001234567890")
+        val manual = repo.createManualPass(BarcodeFormat.CODE128, "6001234567890")
 
         // Mark alreadyVoidedSource voided via a real 410 refresh, before wiring up the routes the
         // worker itself will hit - this pass must NOT be polled again once voided.
