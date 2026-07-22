@@ -1,0 +1,60 @@
+{
+  "categories": [
+    {
+      "title": "## 💥 Breaking Changes",
+      "labels": ["breaking"]
+    },
+    {
+      "title": "## 🐛 Fixes",
+      "labels": ["fix"]
+    },
+    {
+      "title": "## 📝 Documentation",
+      "labels": ["docs"]
+    },
+    {
+      "title": "## 🔧 CI / Build",
+      "labels": ["chore"]
+    },
+    {
+      "title": "## 🚀 Features",
+      "labels": []
+    }
+  ],
+  "label_extractor": [
+    {
+      "pattern": "^\\w+(\\(.*\\))?!:.*",
+      "target": "breaking",
+      "flags": "giu",
+      "on_property": "title"
+    },
+    {
+      "pattern": "BREAKING[ -]CHANGE",
+      "target": "breaking",
+      "flags": "giu",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(fix|bugfix)\\b.*",
+      "target": "fix",
+      "flags": "giu",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(docs?|documentation)\\b.*",
+      "target": "docs",
+      "flags": "giu",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(ci|build|chore)\\b.*",
+      "target": "chore",
+      "flags": "giu",
+      "on_property": "title"
+    }
+  ],
+  "template": "#{{CHANGELOG}}",
+  "pr_template": "- #{{TITLE}} (##{{NUMBER}})",
+  "empty_template": "- no changes",
+  "trim_values": true
+}
