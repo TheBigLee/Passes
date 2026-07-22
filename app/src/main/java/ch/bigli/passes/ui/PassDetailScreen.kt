@@ -19,7 +19,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -80,7 +79,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
@@ -94,8 +92,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.bigli.passes.barcode.BarcodeRenderer
 import ch.bigli.passes.domain.BarcodeFormat
-import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
+import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.images.PassImage
 import ch.bigli.passes.images.PassImageLoader
 import kotlin.math.roundToInt
@@ -270,13 +268,16 @@ fun PassDetailScreen(
         val source = barcodeSourceBounds
         val target = rootBounds
         if (bmp != null && source != null && target != null && barcodeProgress > 0f) {
+            // Same voided/expired-replaces-altText rule as the inline barcode caption below.
+            val captionText = p?.voidedOrExpiredMessage() ?: p?.barcode?.altText
             FullscreenBarcodeOverlay(
                 bitmap = bmp,
                 sourceBounds = source,
                 targetBounds = target,
                 progress = barcodeProgress,
                 rotateToLandscape = !isSquareBarcode,
-                altText = p?.barcode?.altText,
+                altText = captionText,
+                dimmed = p?.isVoidedOrExpired() == true,
                 onDismiss = { fullscreenBarcode = false },
             )
         }
@@ -303,6 +304,7 @@ private fun FullscreenBarcodeOverlay(
     progress: Float,
     rotateToLandscape: Boolean,
     altText: String?,
+    dimmed: Boolean,
     onDismiss: () -> Unit,
 ) {
     // targetBounds is the raw Compose window size, which on an edge-to-edge window includes the
@@ -370,10 +372,14 @@ private fun FullscreenBarcodeOverlay(
             val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
             val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
             val captionGap = 16.dp.toPx()
+            // Matches the inline barcode's own dimming (PassFrontContent applies the same
+            // 0.35f alpha to its white card) so a voided/expired pass looks consistently
+            // greyed-out whether inline or fullscreen.
+            val contentAlpha = if (dimmed) 0.35f else 1f
             val textLayout = altText?.let {
                 textMeasurer.measure(
                     text = it,
-                    style = TextStyle(color = Color.Black, fontSize = 12.sp, textAlign = TextAlign.Center),
+                    style = TextStyle(color = Color.Black.copy(alpha = contentAlpha), fontSize = 12.sp, textAlign = TextAlign.Center),
                     // fixedWidth, not maxWidth alone: a min of 0 would let the layout shrink to
                     // the text's own natural (short) width, leaving textAlign=Center nothing to
                     // center within - it needs to actually BE the full barcode width.
@@ -381,7 +387,7 @@ private fun FullscreenBarcodeOverlay(
                 )
             }
             fun drawBarcodeAndCaption() {
-                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize)
+                drawImage(imageBitmap, dstOffset = dstOffset, dstSize = dstSize, alpha = contentAlpha)
                 if (textLayout != null) {
                     drawText(textLayout, topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y + dstSize.height + captionGap))
                 }
@@ -418,6 +424,7 @@ private fun PassFrontContent(
         modifier = Modifier.fillMaxSize(),
     ) {
         val isVoidedOrExpired = pass.isVoidedOrExpired()
+        val isBoarding = pass.type == PassType.BOARDING
         Column(Modifier.fillMaxSize().background(bg)) {
             strip?.let {
                 Image(
@@ -427,18 +434,18 @@ private fun PassFrontContent(
                     contentScale = ContentScale.FillWidth,
                 )
             }
+            if (isBoarding) {
+                BoardingHeaderRow(pass, fg)
+            }
             Column(
                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Top,
             ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    pass.fields.filter { it.position != FieldPosition.PRIMARY }.take(4).forEach { f ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text(f.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
+                if (isBoarding) {
+                    BoardingFieldsLayout(pass, fg)
+                } else {
+                    GenericFieldsLayout(pass, fg)
                 }
                 Spacer(Modifier.size(32.dp))
                 pass.barcode?.let { bc ->
@@ -478,22 +485,11 @@ private fun PassFrontContent(
                                     ),
                             )
                         }
-                        if (pass.voided) {
-                            Text(
-                                "This pass has been voided by the issuer",
-                                color = Color.Black,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        } else if (pass.expirationDate?.isBefore(java.time.Instant.now()) == true) {
-                            Text(
-                                "This pass has expired",
-                                color = Color.Black,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        }
-                        bc.altText?.let {
+                        // A voided/expired status message replaces the alt text entirely,
+                        // rather than stacking below it - the barcode's own caption isn't
+                        // meaningful once the pass can't actually be used to scan.
+                        val captionText = pass.voidedOrExpiredMessage() ?: bc.altText
+                        captionText?.let {
                             Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
