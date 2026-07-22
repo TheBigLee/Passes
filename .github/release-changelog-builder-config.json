@@ -1,0 +1,41 @@
+{
+  "categories": [
+    {
+      "title": "## 🐛 Fixes",
+      "labels": ["fix"]
+    },
+    {
+      "title": "## 📝 Documentation",
+      "labels": ["docs"]
+    },
+    {
+      "title": "## 🔧 CI / Build",
+      "labels": ["chore"]
+    },
+    {
+      "title": "## 🚀 Other Changes",
+      "labels": []
+    }
+  ],
+  "label_extractor": [
+    {
+      "pattern": "^(?i)(fix|bugfix)\\b.*",
+      "target": "fix",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(?i)(docs?|documentation)\\b.*",
+      "target": "docs",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(?i)(ci|build|chore)\\b.*",
+      "target": "chore",
+      "on_property": "title"
+    }
+  ],
+  "template": "#{{CHANGELOG}}",
+  "pr_template": "- #{{TITLE}} (##{{NUMBER}})",
+  "empty_template": "- no changes",
+  "trim_values": true
+}
