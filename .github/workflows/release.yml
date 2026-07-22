@@ -69,8 +69,10 @@ jobs:
 
       - name: Resolve previous release tag
         id: prev
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_TAG: ${{ steps.ver.outputs.tag }}
         run: |
           # Explicitly resolve the previous *published GitHub Release*'s tag, rather than
           # letting release-changelog-builder-action auto-detect it. On a tag-push trigger, the
@@ -79,8 +81,12 @@ jobs:
           # current tag itself (comparing it to its own commit, yielding an empty changelog).
           # `gh release list` only sees releases published by a prior run of this workflow, so it
           # can't see the not-yet-created current release and reliably names something older.
+          # Not fatal if this fails or finds nothing (e.g. the very first release ever) - the
+          # changelog step below tolerates an empty fromTag the same way it already tolerates
+          # its own failure.
           PREV=$(gh release list --limit 50 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName != "${{ steps.ver.outputs.tag }}")] | sort_by(.createdAt) | last | .tagName // empty')
+            --jq --arg current "$CURRENT_TAG" \
+            '[.[] | select(.tagName != $current)] | sort_by(.createdAt) | last | .tagName // empty')
           echo "tag=$PREV" >> "$GITHUB_OUTPUT"
 
       - name: Build changelog
