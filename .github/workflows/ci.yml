@@ -34,8 +34,8 @@ jobs:
       - name: Unit tests + debug build
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
-      - name: Release lint (catches release-only issues, e.g. manifest merge errors)
+      - name: Release lint
         run: ./gradlew :app:lintVitalRelease --stacktrace
 
-      - name: Release build (unsigned; exercises the full release packaging path)
+      - name: Release build
         run: ./gradlew :app:assembleRelease --stacktrace

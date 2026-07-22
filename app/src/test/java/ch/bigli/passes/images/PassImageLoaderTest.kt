@@ -1,5 +1,6 @@
 package ch.bigli.passes.images
 
+import android.graphics.Bitmap
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -9,6 +10,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 @RunWith(RobolectricTestRunner::class)
 class PassImageLoaderTest {
@@ -47,5 +51,76 @@ class PassImageLoaderTest {
         val second = loader.load(path, PassImage.LOGO)
         assertNotNull(first)
         assertSame(first, second)
+    }
+
+    private fun pngBytes(width: Int): ByteArray {
+        val bmp = Bitmap.createBitmap(width, 1, Bitmap.Config.ARGB_8888)
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+        return out.toByteArray()
+    }
+
+    @Test fun `prefers a localized image override when the current locale matches`() = runTest {
+        val originalLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("de"))
+            val out = java.io.ByteArrayOutputStream()
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry("logo.png")); zip.write(pngBytes(1)); zip.closeEntry()
+                zip.putNextEntry(ZipEntry("de.lproj/logo.png")); zip.write(pngBytes(2)); zip.closeEntry()
+            }
+            val f = File.createTempFile("localized", ".pkpass")
+            f.writeBytes(out.toByteArray())
+            f.deleteOnExit()
+
+            val bmp = loader.load(f.absolutePath, PassImage.LOGO)
+            assertEquals(2, bmp!!.width)
+        } finally {
+            Locale.setDefault(originalLocale)
+        }
+    }
+
+    @Test fun `falls back to the top-level image when the locale has no override`() = runTest {
+        val originalLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("fr"))
+            val out = java.io.ByteArrayOutputStream()
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry("logo.png")); zip.write(pngBytes(1)); zip.closeEntry()
+                zip.putNextEntry(ZipEntry("de.lproj/logo.png")); zip.write(pngBytes(2)); zip.closeEntry()
+            }
+            val f = File.createTempFile("localized", ".pkpass")
+            f.writeBytes(out.toByteArray())
+            f.deleteOnExit()
+
+            val bmp = loader.load(f.absolutePath, PassImage.LOGO)
+            assertEquals(1, bmp!!.width)
+        } finally {
+            Locale.setDefault(originalLocale)
+        }
+    }
+
+    @Test fun `invalidates the cache when the locale changes between loads`() = runTest {
+        val originalLocale = Locale.getDefault()
+        try {
+            val out = java.io.ByteArrayOutputStream()
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry("logo.png")); zip.write(pngBytes(1)); zip.closeEntry()
+                zip.putNextEntry(ZipEntry("de.lproj/logo.png")); zip.write(pngBytes(2)); zip.closeEntry()
+            }
+            val f = File.createTempFile("localized", ".pkpass")
+            f.writeBytes(out.toByteArray())
+            f.deleteOnExit()
+
+            Locale.setDefault(Locale.forLanguageTag("fr"))
+            val first = loader.load(f.absolutePath, PassImage.LOGO)
+            assertEquals(1, first!!.width)
+
+            Locale.setDefault(Locale.forLanguageTag("de"))
+            val second = loader.load(f.absolutePath, PassImage.LOGO)
+            assertEquals(2, second!!.width)
+        } finally {
+            Locale.setDefault(originalLocale)
+        }
     }
 }

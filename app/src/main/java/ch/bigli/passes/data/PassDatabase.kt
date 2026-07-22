@@ -20,7 +20,21 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
-@Database(entities = [PassEntity::class], version = 3, exportSchema = false)
+/**
+ * Adds `description` (raw pass.json description, needed to recompute title live) and
+ * `titleCustomized` (protects a user-renamed title from being overwritten by live
+ * re-translation). Existing rows get `description = NULL`, `titleCustomized = 0` — every
+ * pre-existing pass is treated as "not customized," so its title starts being live-recomputed
+ * in the current locale after this update, which is the desired behavior.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE passes ADD COLUMN description TEXT")
+        db.execSQL("ALTER TABLE passes ADD COLUMN titleCustomized INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+@Database(entities = [PassEntity::class], version = 4, exportSchema = false)
 abstract class PassDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 }

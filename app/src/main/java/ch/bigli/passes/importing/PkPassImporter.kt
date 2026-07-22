@@ -9,6 +9,7 @@ import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
 import ch.bigli.passes.domain.UpdateInfo
+import ch.bigli.passes.domain.computeTitle
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.util.UUID
@@ -32,12 +33,7 @@ class PkPassImporter : PassImporter {
             structure?.secondaryFields?.forEach { add(it.toField(FieldPosition.SECONDARY)) }
             structure?.auxiliaryFields?.forEach { add(it.toField(FieldPosition.AUXILIARY)) }
         }
-        val primary = structure?.primaryFields.orEmpty()
-        val title = when {
-            primary.size >= 2 -> "${primary[0].label ?: primary[0].value} → ${primary[1].label ?: primary[1].value}"
-            primary.isNotEmpty() -> primary[0].value
-            else -> pj.description ?: pj.organizationName ?: "Pass"
-        }
+        val title = computeTitle(fields, pj.description, pj.organizationName)
 
         val update = if (!pj.webServiceURL.isNullOrBlank() && !pj.authenticationToken.isNullOrBlank()
             && !pj.serialNumber.isNullOrBlank() && !pj.passTypeIdentifier.isNullOrBlank()
@@ -51,6 +47,7 @@ class PkPassImporter : PassImporter {
             title = title,
             subtitle = pj.organizationName,
             organization = pj.organizationName,
+            description = pj.description,
             bgColor = parseColor(pj.backgroundColor),
             fgColor = parseColor(pj.foregroundColor),
             fields = fields,
@@ -110,5 +107,9 @@ class PkPassImporter : PassImporter {
         return (0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong()
     }
 
-    private fun PkField.toField(pos: FieldPosition) = PassField(label ?: key, value, pos)
+    private fun PkField.toField(pos: FieldPosition) = PassField(
+        label = if (pos == FieldPosition.PRIMARY) (label ?: value) else (label ?: key),
+        value = value,
+        position = pos,
+    )
 }

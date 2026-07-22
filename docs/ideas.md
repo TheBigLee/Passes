@@ -94,3 +94,36 @@ Points to investigate when picked up:
 - **Brightness:** the screen is already boosted to full brightness while `PassDetailScreen` is
   visible (see the `DisposableEffect` there), so fullscreen mode doesn't need its own brightness
   handling, just bigger scale.
+
+## Show primary field values on boarding-pass-style passes
+
+`PassDetailScreen`/`PassListScreen` only ever use pkpass `primaryFields` to build the auto-generated
+title (the field *labels*, joined by an arrow — e.g. "Departure → Arrival"); the primary fields'
+actual *values* (e.g. the departure/arrival airport codes themselves) are never shown anywhere in
+the UI. Confirmed while device-testing pkpass localization (2026-07-22) on a real boarding pass
+whose primary fields have explicit labels ("departsHeading"/"destinationHeading", translated via
+`pass.strings` to "Departure"/"Arrival") — the title correctly showed "Departure → Arrival" but the
+actual airport codes (ZRH/WAW) never appeared anywhere on the pass.
+
+Points to investigate when picked up:
+- **Display:** boarding-pass-style passes conventionally show the two primary values large and
+  prominent (e.g. big airport codes with an arrow/plane icon between them) — worth a
+  `PassType.BOARDING`-specific layout rather than bolting onto the generic fields grid.
+- **Scope:** decide whether this only applies to `PassType.BOARDING` or should show primary field
+  values generically for any pass type that has them.
+
+## Non-primary fields are silently truncated past 4
+
+`PassDetailScreen`/`PassListScreen` both do
+`p.fields.filter { it.position != FieldPosition.PRIMARY }.take(4)` — if a pass's combined
+header+secondary+auxiliary fields exceed 4, the rest are silently dropped with no indication.
+Confirmed while device-testing pkpass localization (2026-07-22): a real boarding pass's auxiliary
+fields (flight number, date, boarding time, class, status) were partly/fully cut off because
+earlier header/secondary fields already filled the 4-slot cap.
+
+Points to investigate when picked up:
+- **Display:** either raise/remove the cap with a wrapping/scrollable layout, or make truncation
+  visible (e.g. an overflow indicator) instead of silent data loss.
+- **Priority:** decide whether header/secondary/auxiliary should be weighted differently when
+  something has to be cut (e.g. always keep auxiliary fields like flight/date/boarding time, which
+  tend to be more critical than secondary ones).
