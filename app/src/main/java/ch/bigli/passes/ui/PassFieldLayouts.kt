@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,9 +68,9 @@ private fun GenericField(field: PassField, fg: Color) {
 }
 
 /**
- * Top-right header slot for BOARDING passes (e.g. "BOARDS 08:45"), rendered next to the
- * strip/logo area rather than inside the scrollable fields column. No-op if the pass has
- * no HEADER fields (most non-boarding sample passes, and some boarding passes, have none).
+ * Top-right header slot for BOARDING passes (e.g. "Gate A/B", "Seat 9F"), rendered next to
+ * the strip/logo area rather than inside the scrollable fields column. No-op if the pass has
+ * no HEADER fields.
  */
 @Composable
 fun BoardingHeaderRow(pass: Pass, fg: Color) {
@@ -84,8 +85,8 @@ fun BoardingHeaderRow(pass: Pass, fg: Color) {
                 Modifier.padding(start = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 9.sp)
-                Text(f.value, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(f.label, color = fg.copy(alpha = 0.7f), fontSize = 11.sp)
+                Text(f.value, color = fg, fontSize = 18.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -93,21 +94,20 @@ fun BoardingHeaderRow(pass: Pass, fg: Color) {
 
 /**
  * Field layout for BOARDING passes, matching the SWISS/Google Wallet reference: a big
- * two-up PRIMARY row (label big / value small - the inverse of every other position,
- * since boardingPass primary fields carry the airport code in `label` and the city name
- * in `value`) with a plane icon between, then SECONDARY and AUXILIARY fields flowing
- * below with no cap.
+ * two-up PRIMARY row (origin/destination) with a plane icon between pointing from
+ * departure toward destination, then AUXILIARY fields (capped at 4 - real boarding
+ * passes reliably carry exactly flight/date/boarding/class), then SECONDARY fields
+ * (capped at 2, first left-aligned/second right-aligned - e.g. passenger/status).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BoardingFieldsLayout(pass: Pass, fg: Color) {
     val primary = pass.fields.filter { it.position == FieldPosition.PRIMARY }.take(2)
-    val secondary = pass.fields.filter { it.position == FieldPosition.SECONDARY }
-    val auxiliary = pass.fields.filter { it.position == FieldPosition.AUXILIARY }
+    val auxiliary = pass.fields.filter { it.position == FieldPosition.AUXILIARY }.take(4)
+    val secondary = pass.fields.filter { it.position == FieldPosition.SECONDARY }.take(2)
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // A pass with zero PRIMARY fields intentionally renders no primary row at all here -
-        // not a bug, and no placeholder/spacer is needed for the missing else-branch.
+        // A pass with zero PRIMARY fields intentionally renders no primary row at all.
         if (primary.size == 2) {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -115,15 +115,30 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BoardingPrimaryField(primary[0], fg)
-                Icon(Icons.Filled.Flight, contentDescription = null, tint = fg, modifier = Modifier.size(24.dp))
+                Icon(
+                    Icons.Filled.Flight,
+                    contentDescription = null,
+                    tint = fg,
+                    modifier = Modifier.size(28.dp).graphicsLayer(rotationZ = -45f),
+                )
                 BoardingPrimaryField(primary[1], fg)
             }
         } else if (primary.size == 1) {
             BoardingPrimaryField(primary[0], fg)
             Spacer(Modifier.size(16.dp))
         }
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            (secondary + auxiliary).forEach { f -> GenericField(f, fg) }
+        if (auxiliary.isNotEmpty()) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                auxiliary.forEach { GenericField(it, fg) }
+            }
+        }
+        if (secondary.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                secondary.forEach { GenericField(it, fg) }
+            }
         }
     }
 }
@@ -131,7 +146,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
 @Composable
 private fun BoardingPrimaryField(field: PassField, fg: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(field.label, color = fg, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        Text(field.value, color = fg.copy(alpha = 0.7f), fontSize = 12.sp)
+        Text(field.label, color = fg.copy(alpha = 0.7f), fontSize = 12.sp)
+        Text(field.value, color = fg, fontSize = 40.sp, fontWeight = FontWeight.Bold)
     }
 }
