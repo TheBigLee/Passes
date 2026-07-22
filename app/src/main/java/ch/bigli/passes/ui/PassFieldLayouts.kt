@@ -106,6 +106,8 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
     val auxiliary = pass.fields.filter { it.position == FieldPosition.AUXILIARY }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // A pass with zero PRIMARY fields intentionally renders no primary row at all here -
+        // not a bug, and no placeholder/spacer is needed for the missing else-branch.
         if (primary.size == 2) {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -121,12 +123,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
             Spacer(Modifier.size(16.dp))
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            secondary.forEach { BoardingSecondaryField(it, fg) }
-        }
-        if (auxiliary.isNotEmpty()) {
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                auxiliary.forEach { BoardingSecondaryField(it, fg) }
-            }
+            (secondary + auxiliary).forEach { f -> GenericField(f, fg) }
         }
     }
 }
@@ -136,16 +133,5 @@ private fun BoardingPrimaryField(field: PassField, fg: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(field.label, color = fg, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text(field.value, color = fg.copy(alpha = 0.7f), fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun BoardingSecondaryField(field: PassField, fg: Color) {
-    Column(
-        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(field.label, color = fg.copy(alpha = 0.7f), fontSize = 10.sp)
-        Text(field.value, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
