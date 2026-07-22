@@ -19,7 +19,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -270,11 +269,7 @@ fun PassDetailScreen(
         val target = rootBounds
         if (bmp != null && source != null && target != null && barcodeProgress > 0f) {
             // Same voided/expired-replaces-altText rule as the inline barcode caption below.
-            val captionText = when {
-                p?.voided == true -> "This pass has been voided by the issuer"
-                p?.expirationDate?.isBefore(java.time.Instant.now()) == true -> "This pass has expired"
-                else -> p?.barcode?.altText
-            }
+            val captionText = p?.voidedOrExpiredMessage() ?: p?.barcode?.altText
             FullscreenBarcodeOverlay(
                 bitmap = bmp,
                 sourceBounds = source,
@@ -493,11 +488,7 @@ private fun PassFrontContent(
                         // A voided/expired status message replaces the alt text entirely,
                         // rather than stacking below it - the barcode's own caption isn't
                         // meaningful once the pass can't actually be used to scan.
-                        val captionText = when {
-                            pass.voided -> "This pass has been voided by the issuer"
-                            pass.expirationDate?.isBefore(java.time.Instant.now()) == true -> "This pass has expired"
-                            else -> bc.altText
-                        }
+                        val captionText = pass.voidedOrExpiredMessage() ?: bc.altText
                         captionText?.let {
                             Text(it, color = Color.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                         }

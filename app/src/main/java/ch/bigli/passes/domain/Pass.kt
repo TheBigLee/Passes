@@ -38,4 +38,11 @@ data class Pass(
 ) {
     /** True if the issuer declared this pass voided, or its static [expirationDate] has passed. */
     fun isVoidedOrExpired(): Boolean = voided || expirationDate?.isBefore(Instant.now()) == true
+
+    /** User-facing status message when [isVoidedOrExpired], to replace the barcode's alt text. */
+    fun voidedOrExpiredMessage(): String? = when {
+        voided -> "This pass has been voided by the issuer"
+        expirationDate?.isBefore(Instant.now()) == true -> "This pass has expired"
+        else -> null
+    }
 }

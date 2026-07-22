@@ -110,7 +110,7 @@ private fun FieldsRow(
 private fun GenericField(
     field: PassField,
     fg: Color,
-    alignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    alignment: Alignment.Horizontal,
     modifier: Modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
 ) {
     Column(modifier, horizontalAlignment = alignment) {
