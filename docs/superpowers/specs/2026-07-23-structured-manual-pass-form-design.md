@@ -69,8 +69,10 @@ two-up departure/arrival row when there are exactly 2 PRIMARY fields, so leaving
 would produce a broken-looking layout. The Create button stays disabled until both are filled
 (same pattern as the existing barcode-value requirement).
 
-Switching the kind picker after typing kind-specific fields discards those fields' values -
-the fields don't share meaning across kinds, so there's nothing sensible to carry over.
+Switching the kind picker keeps each kind's own draft in memory rather than discarding it -
+`CreatePassScreen` holds one remembered draft per kind, so switching Event -> Boarding -> back
+to Event restores whatever was typed into the Event fields. The fields still don't share meaning
+*across* kinds (nothing is copied between drafts), but nothing already typed is lost either.
 
 ## Data flow & validation
 
@@ -82,7 +84,12 @@ the fields don't share meaning across kinds, so there's nothing sensible to carr
 - If neither is given, `relevantDate` stays `null` (existing list-sort behavior already sorts
   null-date passes last, via `PassDao.observeAll`'s `ORDER BY relevantDateEpoch IS NULL, ...`).
 - The Create button is disabled until required fields for the currently-selected kind are
-  filled: Organization + barcode value always; From + To additionally for Boarding.
+  filled: Organization + barcode value always; Event name additionally for Event; From + To
+  additionally for Boarding.
+- A background color picker (a row of curated swatches plus a "default" option) was added to
+  the form after this design was first written, setting `pass.bgColor`. There's no separate
+  foreground-color picker - `legibleTextColor` (already used for imported passes) derives a
+  legible foreground from whichever background is chosen, at render time.
 
 ## Testing
 

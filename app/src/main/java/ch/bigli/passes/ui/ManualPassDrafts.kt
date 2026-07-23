@@ -33,6 +33,9 @@ data class EventDraft(
     }
 
     fun toRelevantDate(): Instant? = combineDateTime(date, time)
+
+    /** Without an event name there's no PRIMARY field, so the pass has no headline at all. */
+    val isValid: Boolean get() = eventName.isNotBlank()
 }
 
 /** Manual-entry form state for a [ch.bigli.passes.domain.PassType.BOARDING] pass. */

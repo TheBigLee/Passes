@@ -49,6 +49,12 @@ class ManualPassDraftsTest {
         assertNull(EventDraft(eventName = "X").toRelevantDate())
     }
 
+    @Test fun `EventDraft isValid requires a non-blank event name`() {
+        assertFalse(EventDraft().isValid)
+        assertFalse(EventDraft(eventName = "  ").isValid)
+        assertTrue(EventDraft(eventName = "Basel Tattoo").isValid)
+    }
+
     @Test fun `BoardingDraft builds departure and arrival as PRIMARY fields`() {
         val draft = BoardingDraft(from = "Zurich", to = "Warsaw", transitType = TransitType.AIR)
         val fields = draft.toPassFields()
