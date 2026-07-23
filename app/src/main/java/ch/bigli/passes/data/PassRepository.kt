@@ -82,6 +82,9 @@ class PassRepository(
      * Creates a pass from the manual-entry form (no source file). [fields], [relevantDate],
      * and [transitType] come from the kind-specific draft ([EventDraft]/[BoardingDraft]/
      * [LoyaltyDraft]/[GenericDraft]) the user filled in on [ch.bigli.passes.ui.CreatePassScreen].
+     * [bgColor] is a user-picked swatch or null for the app's default; [ch.bigli.passes.ui.legibleTextColor]
+     * derives a legible foreground from it automatically at render time, so there's no separate
+     * foreground picker.
      */
     suspend fun createManualPass(
         type: PassType,
@@ -89,6 +92,7 @@ class PassRepository(
         fields: List<PassField>,
         relevantDate: Instant?,
         transitType: TransitType?,
+        bgColor: Long?,
         barcodeFormat: BarcodeFormat,
         barcodeValue: String,
     ): Pass = withContext(Dispatchers.IO) {
@@ -97,7 +101,7 @@ class PassRepository(
             type = type,
             subtitle = organization,
             organization = organization,
-            bgColor = null,
+            bgColor = bgColor,
             fgColor = null,
             fields = fields,
             barcode = Barcode(barcodeFormat, barcodeValue, null),

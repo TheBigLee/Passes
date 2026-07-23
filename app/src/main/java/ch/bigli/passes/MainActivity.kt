@@ -26,7 +26,6 @@ import androidx.navigation.navArgument
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.domain.Barcode
 import ch.bigli.passes.domain.Pass
-import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.images.PassImageLoader
 import ch.bigli.passes.importing.walletPassesTargetUrl
 import ch.bigli.passes.ui.CreatePassScreen
@@ -151,16 +150,17 @@ private fun AppNav(app: PassApp) {
             val prefill: Barcode? = remember { app.pendingScan.value }
             CreatePassScreen(
                 prefill = prefill,
-                onCreate = { format, value ->
+                onCreate = { type, organization, fields, relevantDate, transitType, bgColor, barcodeFormat, barcodeValue ->
                     scope.launch {
                         val pass = repo.createManualPass(
-                            type = PassType.GENERIC,
-                            organization = "",
-                            fields = emptyList(),
-                            relevantDate = null,
-                            transitType = null,
-                            barcodeFormat = format,
-                            barcodeValue = value,
+                            type = type,
+                            organization = organization,
+                            fields = fields,
+                            relevantDate = relevantDate,
+                            transitType = transitType,
+                            bgColor = bgColor,
+                            barcodeFormat = barcodeFormat,
+                            barcodeValue = barcodeValue,
                         )
                         app.pendingScan.value = null
                         nav.navigate("detail/${pass.id}") { popUpTo("list") }

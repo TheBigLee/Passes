@@ -40,6 +40,7 @@ class PassRepositoryManualTest {
             fields = emptyList(),
             relevantDate = null,
             transitType = null,
+            bgColor = 0xFF2E7D32L,
             barcodeFormat = BarcodeFormat.CODE128,
             barcodeValue = "6001234567890",
         )
@@ -52,6 +53,8 @@ class PassRepositoryManualTest {
         assertEquals("6001234567890", stored.barcode!!.message)
         assertEquals("", stored.rawFilePath)
         assertNull(stored.transitType)
+        assertEquals(0xFF2E7D32L, stored.bgColor)
+        assertNull(stored.fgColor)
         assertEquals(1, repo.observeAll().first().size)
     }
 
@@ -67,6 +70,7 @@ class PassRepositoryManualTest {
             fields = fields,
             relevantDate = relevantDate,
             transitType = TransitType.AIR,
+            bgColor = null,
             barcodeFormat = BarcodeFormat.QR,
             barcodeValue = "SWISS123",
         )
@@ -75,5 +79,6 @@ class PassRepositoryManualTest {
         assertEquals(fields, stored.fields)
         assertEquals(relevantDate, stored.relevantDate)
         assertEquals(TransitType.AIR, stored.transitType)
+        assertNull(stored.bgColor)
     }
 }

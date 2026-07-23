@@ -154,6 +154,7 @@ class PassRepositoryRefreshTest {
             fields = emptyList(),
             relevantDate = null,
             transitType = null,
+            bgColor = null,
             barcodeFormat = BarcodeFormat.CODE128,
             barcodeValue = "6001234567890",
         )
