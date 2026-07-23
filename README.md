@@ -1,5 +1,7 @@
 # Passes
 
+<img src="docs/assets/logo.png" alt="Passes app logo" width="96" height="96">
+
 Native Android pass wallet. Store, view, and auto-update passes — no Google/Apple account needed.
 
 > [!WARNING]
