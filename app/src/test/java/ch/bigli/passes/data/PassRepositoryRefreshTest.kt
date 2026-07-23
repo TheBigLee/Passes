@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import ch.bigli.passes.domain.BarcodeFormat
+import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.importing.PkPassImporter
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -147,7 +148,16 @@ class PassRepositoryRefreshTest {
     }
 
     @Test fun `refreshPass on a pass without updateInfo returns NotUpdatable without a network call`() = runTest {
-        val manual = repo.createManualPass(BarcodeFormat.CODE128, "6001234567890")
+        val manual = repo.createManualPass(
+            type = PassType.GENERIC,
+            organization = "",
+            fields = emptyList(),
+            relevantDate = null,
+            transitType = null,
+            bgColor = null,
+            barcodeFormat = BarcodeFormat.CODE128,
+            barcodeValue = "6001234567890",
+        )
         val result = repo.refreshPass(manual.id)
         assertEquals(RefreshResult.NotUpdatable, result)
     }

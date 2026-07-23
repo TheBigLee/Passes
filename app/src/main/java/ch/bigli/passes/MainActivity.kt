@@ -150,9 +150,18 @@ private fun AppNav(app: PassApp) {
             val prefill: Barcode? = remember { app.pendingScan.value }
             CreatePassScreen(
                 prefill = prefill,
-                onCreate = { format, value ->
+                onCreate = { type, organization, fields, relevantDate, transitType, bgColor, barcodeFormat, barcodeValue ->
                     scope.launch {
-                        val pass = repo.createManualPass(format, value)
+                        val pass = repo.createManualPass(
+                            type = type,
+                            organization = organization,
+                            fields = fields,
+                            relevantDate = relevantDate,
+                            transitType = transitType,
+                            bgColor = bgColor,
+                            barcodeFormat = barcodeFormat,
+                            barcodeValue = barcodeValue,
+                        )
                         app.pendingScan.value = null
                         nav.navigate("detail/${pass.id}") { popUpTo("list") }
                     }

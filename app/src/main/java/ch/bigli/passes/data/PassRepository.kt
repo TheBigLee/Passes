@@ -10,6 +10,7 @@ import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
+import ch.bigli.passes.domain.TransitType
 import ch.bigli.passes.importing.PassImporter
 import ch.bigli.passes.importing.PdfImporter
 import ch.bigli.passes.importing.PkPassImporter
@@ -21,6 +22,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 import java.util.UUID
 
 sealed interface RefreshResult {
@@ -76,26 +78,42 @@ class PassRepository(
         )
     }
 
-    /** Creates a pass from a manually-entered or scanned barcode (no source file). */
-    suspend fun createManualPass(format: BarcodeFormat, value: String): Pass =
-        withContext(Dispatchers.IO) {
-            val pass = Pass(
-                id = UUID.randomUUID().toString(),
-                type = PassType.GENERIC,
-                subtitle = null,
-                organization = null,
-                bgColor = null,
-                fgColor = null,
-                fields = emptyList(),
-                barcode = Barcode(format, value, null),
-                relevantDate = null,
-                rawFilePath = "",
-                sourceFormat = SourceFormat.MANUAL,
-                updateInfo = null,
-            )
-            dao.insert(pass.toEntity())
-            pass
-        }
+    /**
+     * Creates a pass from the manual-entry form (no source file). [fields], [relevantDate],
+     * and [transitType] come from the kind-specific draft ([EventDraft]/[BoardingDraft]/
+     * [LoyaltyDraft]/[GenericDraft]) the user filled in on [ch.bigli.passes.ui.CreatePassScreen].
+     * [bgColor] is a user-picked swatch or null for the app's default; [ch.bigli.passes.ui.legibleTextColor]
+     * derives a legible foreground from it automatically at render time, so there's no separate
+     * foreground picker.
+     */
+    suspend fun createManualPass(
+        type: PassType,
+        organization: String,
+        fields: List<PassField>,
+        relevantDate: Instant?,
+        transitType: TransitType?,
+        bgColor: Long?,
+        barcodeFormat: BarcodeFormat,
+        barcodeValue: String,
+    ): Pass = withContext(Dispatchers.IO) {
+        val pass = Pass(
+            id = UUID.randomUUID().toString(),
+            type = type,
+            subtitle = organization,
+            organization = organization,
+            bgColor = bgColor,
+            fgColor = null,
+            fields = fields,
+            barcode = Barcode(barcodeFormat, barcodeValue, null),
+            relevantDate = relevantDate,
+            rawFilePath = "",
+            sourceFormat = SourceFormat.MANUAL,
+            updateInfo = null,
+            transitType = transitType,
+        )
+        dao.insert(pass.toEntity())
+        pass
+    }
 
     /** Detects the format from [bytes], persists the raw file, imports, and stores the pass. */
     suspend fun import(bytes: ByteArray, displayName: String): Pass = withContext(Dispatchers.IO) {
