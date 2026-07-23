@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <!--
+      Source: https://www.svgrepo.com/svg/480891/ferry-1 (svgrepo.com), Public Domain.
+      Original artwork faces left (bow on the left); mirrored here via scaleX so the bow
+      points right, matching this app's "departure -> destination" transit-icon convention.
+    -->
+    <group android:scaleX="-1" android:pivotX="256" android:pivotY="256">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M488.776,302.008 L78.962,302.008 L0,302.008 L75.612,414.785 L483.916,414.785 L512,302.008 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="
+                M477.435,225.975 H440.709 L423.427,174.127 H378.06 H306.16 H224.675 L237.637,128.76 H222.515 L192.27,174.127
+                H146.903 L78.962,277.823 H488.776 Z
+                M187.95,242.818 H162.026 V216.894 H187.95 Z
+                M250.599,242.818 H224.675 V216.894 H250.599 Z
+                M313.249,242.818 H287.325 V216.894 H313.249 Z
+                M369.418,242.818 H343.494 V216.894 H369.418 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M378.059,97.215 H319.73 L315.03,119.679 H378.059 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M378.059,132.641 H312.312 L306.16,162.025 H378.059 Z" />
+    </group>
+</vector>

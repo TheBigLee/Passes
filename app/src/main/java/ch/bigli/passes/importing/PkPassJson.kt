@@ -33,6 +33,7 @@ data class PkBarcode(
 
 @Serializable
 data class PkStructure(
+    val transitType: String? = null,
     val headerFields: List<PkField>? = null,
     val primaryFields: List<PkField>? = null,
     val secondaryFields: List<PkField>? = null,
