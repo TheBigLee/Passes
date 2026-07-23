@@ -32,6 +32,7 @@ data class PassEntity(
     val expirationDateEpoch: Long? = null,
     val description: String? = null,
     val backFieldsJson: String = "[]",
+    val autoUpdateEnabled: Boolean = true,
 )
 
 fun Pass.toEntity() = PassEntity(
@@ -52,6 +53,7 @@ fun Pass.toEntity() = PassEntity(
     expirationDateEpoch = expirationDate?.toEpochMilli(),
     description = description,
     backFieldsJson = json.encodeToString(ListSerializer(PassField.serializer()), backFields),
+    autoUpdateEnabled = autoUpdateEnabled,
 )
 
 fun PassEntity.toDomain() = Pass(
@@ -72,4 +74,5 @@ fun PassEntity.toDomain() = Pass(
     lastModified = lastModified,
     expirationDate = expirationDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
     description = description,
+    autoUpdateEnabled = autoUpdateEnabled,
 )

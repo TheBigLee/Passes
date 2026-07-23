@@ -17,7 +17,7 @@ class PassUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val repo = (applicationContext as PassApp).repository
         val passes = repo.observeAll().first()
         passes
-            .filter { it.sourceFormat == SourceFormat.PKPASS && it.updateInfo != null && !it.voided }
+            .filter { it.sourceFormat == SourceFormat.PKPASS && it.updateInfo != null && !it.voided && it.autoUpdateEnabled }
             .forEach { runCatching { repo.refreshPass(it.id) } }
         return Result.success()
     }

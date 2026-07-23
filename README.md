@@ -13,7 +13,7 @@ Native Android pass wallet. Store, view, and auto-update passes — no Google/Ap
 - **Import `.pkpass` files** (Apple Wallet format) — parses `pass.json`, images, barcode, fields.
 - **Import PDF tickets** — extracts a barcode/QR from a PDF page.
 - **Manual entry** — type in or scan a barcode/QR directly.
-- **Auto-update** — passes with a `webServiceURL` poll for changes every 6h (WorkManager) and support pull-to-refresh on the detail screen. Handles voided passes (410) and static `voided`/`expirationDate` fields.
+- **Auto-update** — passes with a `webServiceURL` poll for changes every 6h (WorkManager) and support pull-to-refresh on the detail screen. Handles voided passes (410) and static `voided`/`expirationDate` fields. Can be disabled per-pass (on by default) via a switch on the back of the pass.
 - **Flip-to-back detail view** — a persistent info icon flips the pass to reveal pkpass `backFields` (with HTML/link rendering) and Delete.
 - **Type-aware field layout** — boarding passes get a Wallet-style layout (big origin/destination row with a plane icon, header/auxiliary/secondary fields in their own rows); every other pass type stacks its primary field(s) large, then flows secondary/auxiliary fields below with nothing capped or dropped.
 - **Brightness-boost** while showing a barcode for scanning.

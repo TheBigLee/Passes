@@ -22,4 +22,7 @@ interface PassDao {
 
     @Query("UPDATE passes SET voided = 1 WHERE id = :id")
     suspend fun markVoided(id: String)
+
+    @Query("UPDATE passes SET autoUpdateEnabled = :enabled WHERE id = :id")
+    suspend fun setAutoUpdateEnabled(id: String, enabled: Boolean)
 }

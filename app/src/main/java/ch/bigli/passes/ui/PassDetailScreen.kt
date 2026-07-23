@@ -19,6 +19,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +42,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -246,7 +249,12 @@ fun PassDetailScreen(
                         )
                     } else {
                         Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
-                            PassBackContent(pass = p, bg = bg, fg = fg)
+                            PassBackContent(
+                                pass = p,
+                                bg = bg,
+                                fg = fg,
+                                onSetAutoUpdateEnabled = viewModel::setAutoUpdateEnabled,
+                            )
                         }
                     }
                 }
@@ -506,7 +514,12 @@ private fun PassFrontContent(
 }
 
 @Composable
-private fun PassBackContent(pass: Pass, bg: Color, fg: Color) {
+private fun PassBackContent(
+    pass: Pass,
+    bg: Color,
+    fg: Color,
+    onSetAutoUpdateEnabled: (Boolean) -> Unit,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -516,6 +529,23 @@ private fun PassBackContent(pass: Pass, bg: Color, fg: Color) {
             // floats on top of this content in the bottom-right corner.
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
     ) {
+        // Only shown when the pass actually carries a webServiceURL - toggling it for a
+        // non-updatable pass would have nothing to turn off.
+        if (pass.updateInfo != null) {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto-update", color = fg, fontSize = 14.sp)
+                Switch(
+                    checked = pass.autoUpdateEnabled,
+                    onCheckedChange = onSetAutoUpdateEnabled,
+                    colors = SwitchDefaults.colors(checkedThumbColor = fg, checkedTrackColor = fg.copy(alpha = 0.5f)),
+                )
+            }
+            HorizontalDivider(color = fg.copy(alpha = 0.2f), modifier = Modifier.padding(bottom = 16.dp))
+        }
         pass.backFields.forEachIndexed { index, f ->
             if (index > 0) {
                 HorizontalDivider(color = fg.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))

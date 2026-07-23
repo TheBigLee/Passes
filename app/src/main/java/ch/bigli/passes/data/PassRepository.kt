@@ -46,6 +46,9 @@ class PassRepository(
         dao.deleteById(id)
     }
 
+    suspend fun setAutoUpdateEnabled(id: String, enabled: Boolean) =
+        withContext(Dispatchers.IO) { dao.setAutoUpdateEnabled(id, enabled) }
+
     /**
      * Applies live pkpass localization: re-reads the pass's raw zip (still on disk, unmodified)
      * and translates field labels/values (including backFields), organization, subtitle, and
