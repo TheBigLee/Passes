@@ -47,4 +47,11 @@ class PassDetailViewModel(private val repo: PassRepository, private val passId: 
     fun delete(onDone: () -> Unit) {
         viewModelScope.launch { repo.delete(passId); onDone() }
     }
+
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.setAutoUpdateEnabled(passId, enabled)
+            _pass.value = repo.getById(passId)
+        }
+    }
 }

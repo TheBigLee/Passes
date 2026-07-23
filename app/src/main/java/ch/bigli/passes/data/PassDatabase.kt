@@ -63,7 +63,14 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
-@Database(entities = [PassEntity::class], version = 5, exportSchema = false)
+/** Adds the auto-update opt-out toggle, defaulting existing rows to enabled. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE passes ADD COLUMN autoUpdateEnabled INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
+@Database(entities = [PassEntity::class], version = 6, exportSchema = false)
 abstract class PassDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 }

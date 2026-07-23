@@ -19,9 +19,10 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * Exercises [PassUpdateWorker]'s filter (pkpass + has updateInfo + not already voided) end to
- * end, since it's the only place that logic lives - a regression here would silently stop
- * eligible passes from being background-refreshed, or start hitting already-voided ones.
+ * Exercises [PassUpdateWorker]'s filter (pkpass + has updateInfo + not already voided + user
+ * hasn't opted out) end to end, since it's the only place that logic lives - a regression here
+ * would silently stop eligible passes from being background-refreshed, or start hitting
+ * already-voided or opted-out ones.
  */
 @RunWith(RobolectricTestRunner::class)
 class PassUpdateWorkerTest {
@@ -85,5 +86,17 @@ class PassUpdateWorkerTest {
         assertTrue("eligible pass should have been refreshed (and voided) by the worker", repo.getById(eligible.id)!!.voided)
         assertTrue("already-voided pass stays voided", repo.getById(alreadyVoidedSource.id)!!.voided)
         assertFalse("manual pass has no updateInfo and must be left alone", repo.getById(manual.id)!!.voided)
+    }
+
+    @Test fun `worker skips passes with auto-update disabled`() = runTest {
+        val optedOut = repo.import(buildPkPass(serial = "OPTED-OUT"), "opted-out.pkpass")
+        repo.setAutoUpdateEnabled(optedOut.id, false)
+
+        // No route registered for this serial - if the worker polled it anyway, the request
+        // would fail/hang instead of silently succeeding, making a regression obvious.
+        val worker = TestListenableWorkerBuilder<PassUpdateWorker>(app).build()
+        worker.doWork()
+
+        assertFalse("opted-out pass must not be voided by a poll it should never have made", repo.getById(optedOut.id)!!.voided)
     }
 }

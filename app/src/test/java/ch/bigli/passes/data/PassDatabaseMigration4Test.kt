@@ -56,7 +56,7 @@ class PassDatabaseMigration4Test {
 
         // Open the same file at v5 through Room, forcing the real migration chain to run.
         val db5 = Room.databaseBuilder(ctx, PassDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
         val stored = runBlocking { db5.passDao().getById("p1") }
         checkNotNull(stored)
