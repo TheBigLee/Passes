@@ -8,6 +8,7 @@ import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
+import ch.bigli.passes.domain.TransitType
 import ch.bigli.passes.domain.UpdateInfo
 import kotlinx.serialization.json.Json
 import java.time.Instant
@@ -57,6 +58,7 @@ class PkPassImporter : PassImporter {
             updateInfo = update,
             expirationDate = pj.expirationDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
             voided = pj.voided ?: false,
+            transitType = resolveTransitType(structure?.transitType),
         )
     }
 
@@ -75,6 +77,15 @@ class PkPassImporter : PassImporter {
             throw ImportError.CorruptFile("not a valid zip: ${e.message}")
         }
         return out ?: throw ImportError.CorruptFile("pass.json missing")
+    }
+
+    private fun resolveTransitType(s: String?): TransitType? = when (s) {
+        "PKTransitTypeAir" -> TransitType.AIR
+        "PKTransitTypeBoat" -> TransitType.BOAT
+        "PKTransitTypeBus" -> TransitType.BUS
+        "PKTransitTypeTrain" -> TransitType.TRAIN
+        "PKTransitTypeGeneric" -> TransitType.GENERIC
+        else -> null
     }
 
     private fun resolveStructure(pj: PkPassJson): Pair<PassType, PkStructure?> = when {

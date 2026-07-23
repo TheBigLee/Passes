@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -18,12 +19,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ch.bigli.passes.R
 import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.PassField
+import ch.bigli.passes.domain.TransitType
 
 /**
  * Field layout for every pass type except BOARDING (which uses [BoardingFieldsLayout]).
@@ -145,8 +149,32 @@ fun BoardingHeaderRow(pass: Pass, fg: Color) {
 }
 
 /**
+ * The icon shown between the two PRIMARY fields, pointing from departure toward destination.
+ * [TransitType.BUS]/[TransitType.TRAIN]/[TransitType.BOAT] use hand-drawn side-profile vector
+ * drawables (`R.drawable.ic_transit_*`) already facing right - Material's stock icons for these
+ * are drawn front-on, not side profile, so they don't read as "pointing" anywhere. Only
+ * [TransitType.AIR]'s Material glyph (a plane silhouette drawn nose-up) needs rotating to point
+ * right. Passes with no [TransitType] (or [TransitType.GENERIC]) fall back to a plain arrow.
+ */
+@Composable
+private fun TransitIcon(transitType: TransitType?, fg: Color, modifier: Modifier = Modifier) {
+    when (transitType) {
+        TransitType.AIR -> Icon(
+            Icons.Filled.Flight,
+            contentDescription = null,
+            tint = fg,
+            modifier = modifier.graphicsLayer(rotationZ = 90f),
+        )
+        TransitType.BUS -> Icon(painterResource(R.drawable.ic_transit_bus), contentDescription = null, tint = fg, modifier = modifier)
+        TransitType.BOAT -> Icon(painterResource(R.drawable.ic_transit_boat), contentDescription = null, tint = fg, modifier = modifier)
+        TransitType.TRAIN -> Icon(painterResource(R.drawable.ic_transit_train), contentDescription = null, tint = fg, modifier = modifier)
+        TransitType.GENERIC, null -> Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = fg, modifier = modifier)
+    }
+}
+
+/**
  * Field layout for BOARDING passes, matching the SWISS/Google Wallet reference: a big
- * two-up PRIMARY row (origin/destination) with a plane icon between pointing from
+ * two-up PRIMARY row (origin/destination) with a transit-mode icon between pointing from
  * departure toward destination, then AUXILIARY fields (capped at 4 - real boarding
  * passes reliably carry exactly flight/date/boarding/class), then SECONDARY fields
  * (capped at 2, first left-aligned/second right-aligned - e.g. passenger/status).
@@ -167,15 +195,7 @@ fun BoardingFieldsLayout(pass: Pass, fg: Color) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BoardingPrimaryField(primary[0], fg)
-                Icon(
-                    Icons.Filled.Flight,
-                    contentDescription = null,
-                    tint = fg,
-                    modifier = Modifier
-                        .padding(top = 24.dp)
-                        .size(52.dp)
-                        .graphicsLayer(rotationZ = 90f),
-                )
+                TransitIcon(pass.transitType, fg, modifier = Modifier.padding(top = 24.dp).size(52.dp))
                 BoardingPrimaryField(primary[1], fg)
             }
         } else if (primary.size == 1) {

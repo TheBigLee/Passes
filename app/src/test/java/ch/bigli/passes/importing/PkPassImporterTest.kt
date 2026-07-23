@@ -4,6 +4,7 @@ import ch.bigli.passes.domain.BarcodeFormat
 import ch.bigli.passes.domain.FieldPosition
 import ch.bigli.passes.domain.ImportError
 import ch.bigli.passes.domain.PassType
+import ch.bigli.passes.domain.TransitType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -33,6 +34,7 @@ class PkPassImporterTest {
     @Test fun `parses boarding pass core fields`() {
         val pass = importer.import(fixture("sample.pkpass").readBytes(), "/data/sample.pkpass", "sample.pkpass")
         assertEquals(PassType.BOARDING, pass.type)
+        assertEquals(TransitType.AIR, pass.transitType)
         assertEquals("SWISS", pass.organization)
         assertEquals(0xFF1A73E8, pass.bgColor)
         assertEquals(BarcodeFormat.QR, pass.barcode!!.format)

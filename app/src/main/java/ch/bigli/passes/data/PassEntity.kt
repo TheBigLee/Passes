@@ -7,6 +7,7 @@ import ch.bigli.passes.domain.Pass
 import ch.bigli.passes.domain.PassField
 import ch.bigli.passes.domain.PassType
 import ch.bigli.passes.domain.SourceFormat
+import ch.bigli.passes.domain.TransitType
 import ch.bigli.passes.domain.UpdateInfo
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -33,6 +34,7 @@ data class PassEntity(
     val description: String? = null,
     val backFieldsJson: String = "[]",
     val autoUpdateEnabled: Boolean = true,
+    val transitType: String? = null,
 )
 
 fun Pass.toEntity() = PassEntity(
@@ -54,6 +56,7 @@ fun Pass.toEntity() = PassEntity(
     description = description,
     backFieldsJson = json.encodeToString(ListSerializer(PassField.serializer()), backFields),
     autoUpdateEnabled = autoUpdateEnabled,
+    transitType = transitType?.name,
 )
 
 fun PassEntity.toDomain() = Pass(
@@ -75,4 +78,5 @@ fun PassEntity.toDomain() = Pass(
     expirationDate = expirationDateEpoch?.let { java.time.Instant.ofEpochMilli(it) },
     description = description,
     autoUpdateEnabled = autoUpdateEnabled,
+    transitType = transitType?.let { TransitType.valueOf(it) },
 )

@@ -7,6 +7,7 @@ enum class PassType { BOARDING, EVENT, LOYALTY, COUPON, GENERIC }
 enum class SourceFormat { PKPASS, GOOGLE_JSON, PDF, MANUAL }
 enum class BarcodeFormat { QR, PDF417, AZTEC, CODE128 }
 enum class FieldPosition { HEADER, PRIMARY, SECONDARY, AUXILIARY, BACK }
+enum class TransitType { AIR, BOAT, BUS, TRAIN, GENERIC }
 
 @Serializable
 data class PassField(val label: String, val value: String, val position: FieldPosition)
@@ -36,6 +37,7 @@ data class Pass(
     val voided: Boolean = false,
     val lastModified: String? = null,
     val autoUpdateEnabled: Boolean = true,
+    val transitType: TransitType? = null,
 ) {
     /** True if the issuer declared this pass voided, or its static [expirationDate] has passed. */
     fun isVoidedOrExpired(): Boolean = voided || expirationDate?.isBefore(Instant.now()) == true

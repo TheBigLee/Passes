@@ -13,6 +13,7 @@ import ch.bigli.passes.data.MIGRATION_2_3
 import ch.bigli.passes.data.MIGRATION_3_4
 import ch.bigli.passes.data.MIGRATION_4_5
 import ch.bigli.passes.data.MIGRATION_5_6
+import ch.bigli.passes.data.MIGRATION_6_7
 import ch.bigli.passes.data.PassDatabase
 import ch.bigli.passes.data.PassRepository
 import ch.bigli.passes.images.PassImageLoader
@@ -44,7 +45,7 @@ class PassApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         val db = Room.databaseBuilder(this, PassDatabase::class.java, "passes.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
         repository = PassRepository(this, db.passDao(), PkPassImporter())
 

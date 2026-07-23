@@ -70,7 +70,14 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
-@Database(entities = [PassEntity::class], version = 6, exportSchema = false)
+/** Adds the transitType column (air/boat/bus/train/generic), so BOARDING passes can render a mode-appropriate icon. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE passes ADD COLUMN transitType TEXT")
+    }
+}
+
+@Database(entities = [PassEntity::class], version = 7, exportSchema = false)
 abstract class PassDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 }
